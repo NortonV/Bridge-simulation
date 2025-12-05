@@ -3,10 +3,10 @@
 -Graphics overhaul: remove center node, drawing by Gergő (background, agent), move the red nodes up and away, make the menus better, make the texts better and hungarian, add more explanations, make color coding in analysis better, add load values in simulation mode (or just color regular-red gradient), idk
 -There is a bug with /\/\ bridge: load is smaller when the agent is at the edge compared to the middle
 -Realistic default material properties. These should be in the middle of the slider. Option to make the agent even heavier. New sliders?
--Fix sound effects (creaking is weird, some sounds feel delayed, etc)
+-Fix sound effects (creaking is weird, some sounds feel delayed, steps should be better, etc)
 -Add a few default bridges that can be loaded (at least what we will build)
 -In analysis mode, if a vine gets compressed, it should throw a visual error and stuff
-..4.
+...
 -Send it over to the bois for beta testing
 -Refactor the code, add lots of comments, I should understand it all
 -Make it installable

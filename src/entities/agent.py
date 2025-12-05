@@ -1,5 +1,6 @@
 import pygame
 from core.constants import *
+from core.material_manager import MaterialManager
 
 class Ixchel:
     def __init__(self, audio_manager=None):
@@ -12,7 +13,7 @@ class Ixchel:
         
         # Audio
         self.audio = audio_manager
-        self.was_moving = False # State tracker for audio
+        self.was_moving = False 
 
     def spawn(self, x, y):
         self.x = x
@@ -25,7 +26,10 @@ class Ixchel:
         if not self.active: return
         
         keys = pygame.key.get_pressed()
-        speed = 5.0 
+        
+        # --- UPDATED: Fetch Speed Live ---
+        speed = MaterialManager.AGENT["speed"]
+        # ---------------------------------
         
         self.velocity_x = 0
         if keys[pygame.K_LEFT]:
@@ -38,18 +42,12 @@ class Ixchel:
             self.velocity_x = 0
 
     def handle_audio(self):
-        """ Handles starting/stopping the step loop based on movement. """
         if not self.audio: return
-
-        # Threshold to consider "moving"
         is_moving = abs(self.velocity_x) > 0.1
         
         if is_moving and not self.was_moving:
-            # STARTED moving: Play Loop
             self.audio.play_sfx("step", loop=True)
-        
         elif not is_moving and self.was_moving:
-            # STOPPED moving: Stop Sound
             self.audio.stop_sfx("step")
             
         self.was_moving = is_moving
@@ -57,7 +55,11 @@ class Ixchel:
     def update_static(self, dt, beams):
         if not self.active: return None
         
-        self.handle_audio() # <--- Audio Logic
+        self.handle_audio() 
+        
+        # --- UPDATED: Fetch Mass Live ---
+        self.mass = MaterialManager.AGENT["mass"]
+        # --------------------------------
 
         self.x += self.velocity_x * dt
         best_beam_y = -9999
@@ -99,11 +101,15 @@ class Ixchel:
     def update(self, dt, constraints):
         if not self.active: return
 
+        # --- UPDATED: Fetch Mass Live ---
+        self.mass = MaterialManager.AGENT["mass"]
+        # --------------------------------
+
         self.x += self.velocity_x * dt
         self.on_ground = False
         self.y -= 9.81 * dt * 2.0 
         
-        self.handle_audio() # <--- Audio Logic
+        self.handle_audio() 
 
         best_beam_y = -9999
         found_constraint = None
@@ -134,7 +140,14 @@ class Ixchel:
 
         if self.on_ground and found_constraint:
             self.y = best_beam_y
-            force = self.mass * 0.05 
+            
+            # SCALED FORCE: 
+            # We scale the force factor slightly so 500kg doesn't instantly explode the bridge,
+            # but still feels very heavy.
+            # Old Factor: 0.05
+            # New Factor: 0.02 (Allows heavier weights without glitching as much)
+            force = self.mass * 0.02 
+            
             node_left_force = force * (1.0 - t_val)
             node_right_force = force * t_val
             

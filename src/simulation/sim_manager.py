@@ -15,12 +15,10 @@ class SimulationManager:
         self.is_running = True
         
         # --- STATE TRACKING FOR AUDIO ---
-        self.broken_hashes = set() # Tracks IDs of broken constraints
-        self.creak_timers = {} # {constraint_id: [time_accumulator, last_stress]}
+        self.broken_hashes = set()
+        self.creak_timers = {} 
         
-        # Initialize Creak Timers with random offsets so they don't all creak at once
         for c in self.solver.constraints:
-            # [time_since_last_check, stress_at_last_check]
             self.creak_timers[c] = [random.uniform(0, 5.0), 0.0]
 
         # --- SPAWN LOGIC ---
@@ -46,61 +44,61 @@ class SimulationManager:
             self.agent.handle_input()
             self.agent.update(dt, self.solver.constraints)
             
-            # --- AUDIO UPDATES ---
             self.check_break_sounds()
             self.check_creak_sounds(dt)
 
     def check_break_sounds(self):
         for c in self.solver.constraints:
             if c.broken and c not in self.broken_hashes:
-                # It just broke!
                 self.broken_hashes.add(c)
-                
                 if c.beam_ref.type == BeamType.VINE:
                     self.audio.play_sfx("vine_break")
                 else:
                     self.audio.play_sfx("wood_break")
 
     def check_creak_sounds(self, dt):
-        """
-        Creaking Logic: 
-        If material changes compression by at least 1% per 5s.
-        """
         for c, data in self.creak_timers.items():
             if c.broken: continue
-            
-            # Update timer
             data[0] += dt
-            
-            # Check every 5 seconds
             if data[0] >= 5.0:
                 current_stress = c.stress
                 last_stress = data[1]
-                
-                # Difference > 1% (0.01)
                 if abs(current_stress - last_stress) > 0.01:
-                    # Only play if there is actually some load (stress > 5%)
-                    # to avoid creaking when bridge is just settling at 0.001 stress
                     if current_stress > 0.05:
                         self.audio.play_sfx("creaking")
-                
-                # Reset
                 data[0] = 0.0
                 data[1] = current_stress
 
     def interpolate_color(self, color_start, color_end, t):
+        # Safety clamp for t
+        t = max(0.0, min(1.0, t))
         r = color_start[0] + (color_end[0] - color_start[0]) * t
         g = color_start[1] + (color_end[1] - color_start[1]) * t
         b = color_start[2] + (color_end[2] - color_start[2]) * t
         return (int(r), int(g), int(b))
+
+    def clamp_screen_coords(self, point):
+        """Prevents Pygame crash by clamping huge coordinates."""
+        x, y = point
+        # Pygame safe range (approx short int)
+        MIN_COORD, MAX_COORD = -10000, 10000
+        return (
+            max(MIN_COORD, min(MAX_COORD, x)),
+            max(MIN_COORD, min(MAX_COORD, y))
+        )
 
     def draw(self, surface, grid):
         # 1. Draw Beams
         for c in self.solver.constraints:
             if c.broken: continue
 
-            start = grid.world_to_screen(c.p_a.x, c.p_a.y)
-            end = grid.world_to_screen(c.p_b.x, c.p_b.y)
+            # Get coordinates
+            raw_start = grid.world_to_screen(c.p_a.x, c.p_a.y)
+            raw_end = grid.world_to_screen(c.p_b.x, c.p_b.y)
+            
+            # CRITICAL FIX: Clamp coordinates to prevent "invalid end_pos" crash
+            start = self.clamp_screen_coords(raw_start)
+            end = self.clamp_screen_coords(raw_end)
             
             base_color = c.beam_ref.color
             final_color = self.interpolate_color(base_color, (255, 0, 0), c.stress)
@@ -113,7 +111,9 @@ class SimulationManager:
 
         # 2. Draw Nodes
         for p in self.solver.particles:
-            pos = grid.world_to_screen(p.x, p.y)
+            raw_pos = grid.world_to_screen(p.x, p.y)
+            pos = self.clamp_screen_coords(raw_pos)
+            
             color = (200, 50, 50) if p.fixed else (255, 255, 255)
             pygame.draw.circle(surface, color, pos, 5)
 

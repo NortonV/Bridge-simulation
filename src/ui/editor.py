@@ -63,7 +63,6 @@ class Editor:
                     self.start_node = self.hover_node
                 elif self.hover_beam:
                     # Case B: Clicked on a beam -> SPLIT IT
-                    # This creates a new node exactly on the beam and splits the beam
                     self.start_node = self.bridge.split_beam(self.hover_beam, wx, wy)
                     self.play_place_sound(self.hover_beam.type)
                 else:
@@ -74,11 +73,45 @@ class Editor:
         elif event.type == pygame.MOUSEBUTTONUP:
             # --- Right Click Release (Drop Node) ---
             if event.button == 3 and self.drag_node:
-                connected = [b for b in self.bridge.beams if b.node_a == self.drag_node or b.node_b == self.drag_node]
-                if connected:
-                    has_wood = any(b.type in [BeamType.WOOD, BeamType.BAMBOO] for b in connected)
-                    if has_wood: self.audio.play_sfx("wood_place")
-                    else: self.audio.play_sfx("vine_place")
+                # MERGE LOGIC START
+                # Check if we dropped the node onto ANOTHER node
+                target_node = self.bridge.get_node_at(self.drag_node.x, self.drag_node.y)
+                
+                # If we found a node, and it's not the one we are dragging
+                if target_node and target_node != self.drag_node:
+                    # 1. Redirect all beams from drag_node to target_node
+                    beams_to_remove = []
+                    for beam in self.bridge.beams:
+                        if beam.node_a == self.drag_node:
+                            beam.node_a = target_node
+                        elif beam.node_b == self.drag_node:
+                            beam.node_b = target_node
+                        
+                        # Check if beam is now zero-length (connected to itself)
+                        if beam.node_a == beam.node_b:
+                            beams_to_remove.append(beam)
+                    
+                    # 2. Remove invalid beams
+                    for b in beams_to_remove:
+                        if b in self.bridge.beams:
+                            self.bridge.beams.remove(b)
+                    
+                    # 3. Remove the drag_node (it has been merged)
+                    if self.drag_node in self.bridge.nodes:
+                        self.bridge.nodes.remove(self.drag_node)
+                        
+                    # 4. Play snap sound (optional feedback)
+                    self.audio.play_sfx("wood_place")
+                # MERGE LOGIC END
+                
+                else:
+                    # Just playing sound if valid placement
+                    connected = [b for b in self.bridge.beams if b.node_a == self.drag_node or b.node_b == self.drag_node]
+                    if connected:
+                        has_wood = any(b.type in [BeamType.WOOD, BeamType.BAMBOO] for b in connected)
+                        if has_wood: self.audio.play_sfx("wood_place")
+                        else: self.audio.play_sfx("vine_place")
+                
                 self.drag_node = None
 
             # --- Left Click Release (Build Beam) ---

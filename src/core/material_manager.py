@@ -16,7 +16,8 @@ class MaterialManager:
     
     # Agent Properties
     AGENT = {
-        "mass": 5.0
+        "mass": 5.0,
+        "speed": 5.0 # New Property
     }
 
     # --- GEOMETRY CONSTANTS ---

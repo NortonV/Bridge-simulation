@@ -48,7 +48,7 @@ class Slider:
         
         # Text
         font = pygame.font.SysFont("arial", 12)
-        txt = font.render(f"{self.label}: {curr:.2f}", True, (255, 255, 255))
+        txt = font.render(f"{self.label}: {curr:.3f}", True, (255, 255, 255))
         surface.blit(txt, (rect.x, rect.y - 15))
 
 class PropertyMenu:
@@ -66,17 +66,21 @@ class PropertyMenu:
         # Wood
         self.sliders.append(Slider("Wood Stiffness", "E", 100, 5000, MaterialManager.MATERIALS["wood"], "E"))
         self.sliders.append(Slider("Wood Density", "density", 0.1, 5.0, MaterialManager.MATERIALS["wood"], "density"))
+        self.sliders.append(Slider("Wood Strength", "strength", 0.001, 0.2, MaterialManager.MATERIALS["wood"], "strength")) # NEW
         
         # Bamboo
         self.sliders.append(Slider("Bamboo Stiffness", "E", 100, 5000, MaterialManager.MATERIALS["bamboo"], "E"))
         self.sliders.append(Slider("Bamboo Density", "density", 0.1, 5.0, MaterialManager.MATERIALS["bamboo"], "density"))
+        self.sliders.append(Slider("Bamboo Strength", "strength", 0.001, 0.5, MaterialManager.MATERIALS["bamboo"], "strength")) # NEW
         
         # Vine
         self.sliders.append(Slider("Vine Stiffness", "E", 10, 500, MaterialManager.MATERIALS["vine"], "E"))
+        self.sliders.append(Slider("Vine Density", "density", 0.1, 5.0, MaterialManager.MATERIALS["vine"], "density")) # NEW
         self.sliders.append(Slider("Vine Strength", "strength", 0.01, 1.0, MaterialManager.MATERIALS["vine"], "strength"))
         
         # Agent
-        self.sliders.append(Slider("Agent Mass", "mass", 1.0, 50.0, MaterialManager.AGENT, "mass"))
+        self.sliders.append(Slider("Agent Mass", "mass", 1.0, 500.0, MaterialManager.AGENT, "mass"))
+        self.sliders.append(Slider("Agent Speed", "speed", 1.0, 20.0, MaterialManager.AGENT, "speed"))
 
     def toggle(self):
         self.visible = not self.visible

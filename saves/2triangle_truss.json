@@ -1,0 +1,71 @@
+{
+    "nodes": [
+        {
+            "x": -10,
+            "y": 5,
+            "fixed": true
+        },
+        {
+            "x": 10,
+            "y": 5,
+            "fixed": true
+        },
+        {
+            "x": 0,
+            "y": -2,
+            "fixed": true
+        },
+        {
+            "x": -5.0,
+            "y": 10.0,
+            "fixed": false
+        },
+        {
+            "x": 0.0,
+            "y": 5.0,
+            "fixed": false
+        },
+        {
+            "x": 5.0,
+            "y": 10.0,
+            "fixed": false
+        }
+    ],
+    "beams": [
+        {
+            "u": 0,
+            "v": 3,
+            "type": "bamboo"
+        },
+        {
+            "u": 3,
+            "v": 4,
+            "type": "bamboo"
+        },
+        {
+            "u": 4,
+            "v": 5,
+            "type": "bamboo"
+        },
+        {
+            "u": 5,
+            "v": 1,
+            "type": "bamboo"
+        },
+        {
+            "u": 5,
+            "v": 3,
+            "type": "bamboo"
+        },
+        {
+            "u": 0,
+            "v": 4,
+            "type": "wood"
+        },
+        {
+            "u": 4,
+            "v": 1,
+            "type": "wood"
+        }
+    ]
+}
