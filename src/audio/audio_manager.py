@@ -3,7 +3,8 @@ import os
 
 class AudioManager:
     def __init__(self):
-        # Initialize the mixer
+        # --- RESTORED INITIALIZATION CODE ---
+        # Initialize the mixer if it hasn't been already
         if not pygame.mixer.get_init():
             pygame.mixer.init()
             
@@ -13,10 +14,16 @@ class AudioManager:
         
         # Allocate channels (0=Music, 1-7=SFX)
         pygame.mixer.set_num_channels(8) 
+        # ------------------------------------
+
+    def get_asset_path(self, filename):
+        # Get the directory containing this script (src/audio/)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # Build path to assets folder (src/audio/assets/)
+        return os.path.join(current_dir, "assets", filename)
 
     def load_music(self, filename):
-        """Loads a music file from the assets folder."""
-        path = os.path.join("audio", "assets", filename)
+        path = self.get_asset_path(filename)
         if os.path.exists(path):
             try:
                 pygame.mixer.music.load(path)
@@ -27,8 +34,7 @@ class AudioManager:
             print(f"Music file not found: {path}")
 
     def load_sfx(self, name, filename):
-        """Loads a short sound effect into memory."""
-        path = os.path.join("audio", "assets", filename)
+        path = self.get_asset_path(filename)
         if os.path.exists(path):
             try:
                 sound = pygame.mixer.Sound(path)
