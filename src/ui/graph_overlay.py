@@ -12,8 +12,6 @@ class GraphOverlay:
 
     def toggle(self):
         self.visible = not self.visible
-        # Clear history on toggle for a clean look, or keep it? 
-        # Keeping it is usually better for analysis.
     
     def reset_data(self):
         self.history = []
@@ -45,25 +43,17 @@ class GraphOverlay:
         if not self.history: 
             return
 
-        # 2. Determine Scale based on current mode of the latest data
-        _, current_mode = self.history[-1]
-        
-        if current_mode == "SIMULATE":
-            y_max = 1.0 # 100% Stress
-            label = "Stress Ratio"
-            unit = "%"
-            color = (0, 255, 255) # Cyan for Physics
-        else: # ANALYSIS
-            y_max = self.eng_max_peak
-            label = "Max Internal Force"
-            unit = "N"
-            color = (255, 100, 100) # Red for Engineering
+        # 2. Determine Scale based on current mode
+        y_max = self.eng_max_peak
+        label = "Max Internal Force"
+        unit = "N"
+        color = (255, 100, 100) # Red for Engineering
 
         # 3. Draw Plot Lines
         points = []
         for i, (val, mode) in enumerate(self.history):
-            # Only draw points that match the current mode to avoid weird jumps
-            if mode != current_mode: continue
+            # Only draw points if mode is ANALYSIS
+            if mode != "ANALYSIS": continue
 
             px = self.rect.x + i
             # Normalize height: (val / y_max)
@@ -81,17 +71,11 @@ class GraphOverlay:
         font = pygame.font.SysFont("arial", 12)
         
         # Top Label (Max Y)
-        if current_mode == "SIMULATE":
-            top_txt = "CRITICAL (100%)"
-        else:
-            top_txt = f"{int(y_max)} {unit}"
+        top_txt = f"{int(y_max)} {unit}"
         
         # Current Value Label
         current_val = self.history[-1][0]
-        if current_mode == "SIMULATE":
-            curr_txt = f"{int(current_val * 100)}%"
-        else:
-            curr_txt = f"{int(current_val)} {unit}"
+        curr_txt = f"{int(current_val)} {unit}"
 
         # Render Text
         surface.blit(font.render(top_txt, True, (150, 150, 150)), (self.rect.x + 5, self.rect.y + 5))

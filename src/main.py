@@ -6,7 +6,6 @@ from entities.bridge import Bridge
 from entities.agent import Ixchel
 from ui.editor import Editor
 from ui.toolbar import Toolbar
-from simulation.sim_manager import SimulationManager
 from solvers.static_solver import StaticSolver
 from core.serializer import Serializer
 from ui.graph_overlay import GraphOverlay
@@ -32,7 +31,6 @@ class BridgeBuilderApp:
         self.prop_menu = PropertyMenu(w, h)
         
         self.mode = "BUILD"
-        self.simulation = None
         self.static_solver = None
         
         self.error_message = None
@@ -53,10 +51,8 @@ class BridgeBuilderApp:
         # Load SFX (Assuming files are in audio/assets/)
         self.audio.load_sfx("wood_place", "wood_place.mp3")
         self.audio.load_sfx("vine_place", "vine_place.mp3")
-        self.audio.load_sfx("wood_break", "wood_break.mp3")
-        self.audio.load_sfx("vine_break", "vine_break.mp3")
-        self.audio.load_sfx("creaking", "creaking.mp3")
-        self.audio.load_sfx("step", "step.mp3") # Note: file is step.mp3, key is "step"
+        # Break/Creak sounds removed as they are simulation-only
+        self.audio.load_sfx("step", "step.mp3") 
 
         self.vol_timer = 0
         self.vol_display_val = 0.5
@@ -128,13 +124,7 @@ class BridgeBuilderApp:
                     if self.mode == "BUILD":
                         self.run_static_analysis()
                     elif self.mode == "ANALYSIS":
-                        self.mode = "BUILD"
-                        self.error_message = None
-                
-                # --- FIXED SIMULATION TRIGGER ---
-                # Start Simulation on Spacebar Key Down
-                if event.key == pygame.K_SPACE and self.mode == "BUILD":
-                    self.start_simulation()
+                        self.stop_analysis()
 
             # Mouse Wheel Volume
             if event.type == pygame.MOUSEWHEEL:
@@ -144,18 +134,16 @@ class BridgeBuilderApp:
                     self.vol_display_val = self.audio.volume
                     self.vol_timer = 120 
 
-            # Toolbar & Simulation
+            # Toolbar
             self.toolbar.handle_input(event)
             curr_tool = self.toolbar.selected_tool["type"]
             
-            # Stop Simulation / Analysis
-            if self.mode != "BUILD":
+            # Stop Analysis if tool selected
+            if self.mode == "ANALYSIS":
                 if event.type == pygame.KEYDOWN:
                     if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_d]:
-                        self.stop_simulation()
+                        self.stop_analysis()
             
-            # Note: We removed the old clunky Play check here because we added the explicit K_SPACE check above.
-
             # Editor (Build)
             if self.mode == "BUILD":
                 self.editor.handle_input(event, world_pos)
@@ -194,22 +182,14 @@ class BridgeBuilderApp:
             else:
                 self.ghost_agent.active = False
 
-    def start_simulation(self):
-        self.mode = "SIMULATE"
-        # Pass audio to Sim Manager
-        self.simulation = SimulationManager(self.bridge, self.audio)
-        self.graph.reset_data()
-        self.show_status("Simulation Running")
-
-    def stop_simulation(self):
+    def stop_analysis(self):
         self.mode = "BUILD"
-        self.simulation = None
         self.static_solver = None
         self.toolbar.active_index = 0
         self.show_status("Build Mode")
+        self.error_message = None
         
-        # --- IMPORTANT: Stop step sound immediately ---
-        # If we switch modes while the agent is walking, the loop might keep playing.
+        # Stop step sound immediately
         self.audio.stop_sfx("step") 
 
     def update(self):
@@ -223,15 +203,7 @@ class BridgeBuilderApp:
 
         max_val = 0.0
         
-        if self.mode == "SIMULATE" and self.simulation:
-            self.simulation.solver.update_live_properties()
-            self.simulation.update(1.0/60.0)
-            for c in self.simulation.solver.constraints:
-                if not c.broken and c.stress > max_val:
-                    max_val = c.stress
-            self.graph.update(max_val, "SIMULATE")
-            
-        elif self.mode == "ANALYSIS" and self.static_solver:
+        if self.mode == "ANALYSIS" and self.static_solver:
             self.ghost_agent.mass = MaterialManager.AGENT["mass"]
             load_info = self.ghost_agent.update_static(1.0/60.0, self.bridge.beams)
             self.static_solver.solve(point_load=load_info)
@@ -251,9 +223,6 @@ class BridgeBuilderApp:
         if self.mode == "BUILD":
             self.editor.draw(self.screen)
             self.draw_hud()
-            
-        elif self.mode == "SIMULATE":
-            self.simulation.draw(self.screen, self.grid)
             
         elif self.mode == "ANALYSIS":
             self.draw_analysis_results()
@@ -282,7 +251,7 @@ class BridgeBuilderApp:
             self.screen.blit(text, rect)
         
         if self.mode == "BUILD":
-            help_txt = self.font.render("Space: Play | A: Analyze | M: Materials | J/H: Solid/Hollow", True, (50,50,50))
+            help_txt = self.font.render("A: Analyze | M: Materials | J/H: Solid/Hollow", True, (50,50,50))
             self.screen.blit(help_txt, (self.screen.get_width() - 650, 20))
         
         self.draw_volume_popup()
