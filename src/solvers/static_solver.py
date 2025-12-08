@@ -27,7 +27,10 @@ class StaticSolver:
         K = [[0.0] * size for _ in range(size)]
         F_vec = [0.0] * size 
 
-        # --- 1. Assemble Stiffness Matrix ---
+        # --- 1. Assemble Stiffness Matrix & Mass Calculation ---
+        # Initialize Node Mass (for gravity load)
+        node_masses = [0.0] * n_nodes
+
         for beam in self.beams:
             n1, n2 = node_map[beam.node_a], node_map[beam.node_b]
             dx = beam.node_b.x - beam.node_a.x
@@ -35,11 +38,12 @@ class StaticSolver:
             L = math.sqrt(dx**2 + dy**2)
             if L == 0: continue
 
-            # --- UPDATED: Fetch from Manager ---
+            # Get Properties (Includes Thickness Scaling)
             props = MaterialManager.get_properties(beam.type, beam.hollow)
             E = props["E"]
-            # -----------------------------------
+            lin_density = props["density"]
 
+            # A. Stiffness (K)
             k = E / L
             cx, cy = dx / L, dy / L
             
@@ -55,15 +59,22 @@ class StaticSolver:
                 for c in range(4):
                     K[indices[r]][indices[c]] += k * coeffs[r][c]
 
+            # B. Mass Distribution (Gravity Load)
+            # Beam Mass = Linear Density * Length
+            beam_mass = lin_density * L
+            # Distribute half to each node
+            node_masses[n1] += beam_mass / 2.0
+            node_masses[n2] += beam_mass / 2.0
+
         # --- 2. Apply Loads ---
         # A. Dead Load (Gravity)
-        for i, node in enumerate(self.nodes):
-            F_vec[2*i + 1] -= 9.81 * 10.0 
+        for i in range(n_nodes):
+            # F = m * g (downwards)
+            F_vec[2*i + 1] -= node_masses[i] * 9.81 
         
         # B. Live Load (Ixchel)
         if point_load:
-            # Scale force by mass from manager if needed, but here we use the load passed in
-            agent_force = point_load['mass'] * 9.81 * 10.0 
+            agent_force = point_load['mass'] * 9.81
             
             n1_idx = node_map[point_load['node_a']]
             n2_idx = node_map[point_load['node_b']]
@@ -99,10 +110,8 @@ class StaticSolver:
             cx, cy = dx/L, dy/L
             deformation = (u2 - u1)*cx + (v2 - v1)*cy
             
-            # --- UPDATED: Fetch from Manager ---
             props = MaterialManager.get_properties(beam.type, beam.hollow)
             force = (props["E"] / L) * deformation
-            # -----------------------------------
             
             self.results[beam] = force
             

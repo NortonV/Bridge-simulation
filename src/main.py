@@ -32,6 +32,7 @@ class BridgeBuilderApp:
         
         self.mode = "BUILD"
         self.static_solver = None
+        self.broken_beams = set()
         
         self.error_message = None
         self.status_message = None
@@ -41,24 +42,16 @@ class BridgeBuilderApp:
         self.bridge.add_node(10, 5, fixed=True)
         self.bridge.add_node(0, -2, fixed=True)
 
-        # --- AUDIO SETUP ---
         self.audio = AudioManager()
-        
-        # Load Music
         self.audio.load_music("theme.mp3")
         self.audio.play_music()
-        
-        # Load SFX (Assuming files are in audio/assets/)
         self.audio.load_sfx("wood_place", "wood_place.mp3")
         self.audio.load_sfx("vine_place", "vine_place.mp3")
-        # Break/Creak sounds removed as they are simulation-only
         self.audio.load_sfx("step", "step.mp3") 
 
         self.vol_timer = 0
         self.vol_display_val = 0.5
         
-        # --- DEPENDENCY INJECTION ---
-        # We pass self.audio to Editor and Agent
         self.editor = Editor(self.grid, self.bridge, self.toolbar, self.audio)
         self.ghost_agent = Ixchel(self.audio) 
 
@@ -77,7 +70,6 @@ class BridgeBuilderApp:
         world_pos = self.grid.snap(mx, my)
         keys = pygame.key.get_pressed()
 
-        # Continuous Volume (Arrows)
         if keys[pygame.K_UP]:
             self.audio.change_volume(0.01)
             self.vol_display_val = self.audio.volume
@@ -89,11 +81,8 @@ class BridgeBuilderApp:
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT: self.quit()
+            if self.prop_menu.handle_input(event): continue 
             
-            if self.prop_menu.handle_input(event):
-                continue 
-            
-            # Key Presses
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE: self.quit()
                 if event.key == pygame.K_m: self.prop_menu.toggle()
@@ -105,7 +94,6 @@ class BridgeBuilderApp:
                     self.show_status("Mode: HOLLOW")
                 if event.key == pygame.K_g: self.graph.toggle()
 
-                # Save/Load
                 is_ctrl = (keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL])
                 if is_ctrl and event.key == pygame.K_s:
                     if self.mode == "BUILD":
@@ -119,14 +107,10 @@ class BridgeBuilderApp:
                         else: self.show_error(msg)
                         self.graph.reset_data()
                         
-                # Analysis Toggle
                 if event.key == pygame.K_a:
-                    if self.mode == "BUILD":
-                        self.run_static_analysis()
-                    elif self.mode == "ANALYSIS":
-                        self.stop_analysis()
+                    if self.mode == "BUILD": self.run_static_analysis()
+                    elif self.mode == "ANALYSIS": self.stop_analysis()
 
-            # Mouse Wheel Volume
             if event.type == pygame.MOUSEWHEEL:
                 if event.y != 0:
                     change = event.y * 0.05
@@ -134,21 +118,16 @@ class BridgeBuilderApp:
                     self.vol_display_val = self.audio.volume
                     self.vol_timer = 120 
 
-            # Toolbar
             self.toolbar.handle_input(event)
-            curr_tool = self.toolbar.selected_tool["type"]
             
-            # Stop Analysis if tool selected
             if self.mode == "ANALYSIS":
                 if event.type == pygame.KEYDOWN:
                     if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_d]:
                         self.stop_analysis()
             
-            # Editor (Build)
             if self.mode == "BUILD":
                 self.editor.handle_input(event, world_pos)
         
-        # Ghost Agent (Analysis)
         if self.mode == "ANALYSIS":
             self.ghost_agent.handle_input()
 
@@ -166,6 +145,7 @@ class BridgeBuilderApp:
             self.mode = "ANALYSIS"
             self.show_status(f"Analysis (Mass: {self.ghost_agent.mass:.1f})")
             self.graph.reset_data()
+            self.broken_beams.clear()
             
             start_node = None
             min_x = 9999
@@ -188,8 +168,7 @@ class BridgeBuilderApp:
         self.toolbar.active_index = 0
         self.show_status("Build Mode")
         self.error_message = None
-        
-        # Stop step sound immediately
+        self.broken_beams.clear()
         self.audio.stop_sfx("step") 
 
     def update(self):
@@ -202,20 +181,31 @@ class BridgeBuilderApp:
         self.prop_menu.update()
 
         max_val = 0.0
+        max_perc = 0.0
         
         if self.mode == "ANALYSIS" and self.static_solver:
             self.ghost_agent.mass = MaterialManager.AGENT["mass"]
             load_info = self.ghost_agent.update_static(1.0/60.0, self.bridge.beams)
             self.static_solver.solve(point_load=load_info)
-            for force in self.static_solver.results.values():
-                if abs(force) > max_val:
-                    max_val = abs(force)
-            self.graph.update(max_val, "ANALYSIS")
+            
+            for beam, force in self.static_solver.results.items():
+                if abs(force) > max_val: max_val = abs(force)
+                
+                props = MaterialManager.get_properties(beam.type, beam.hollow)
+                capacity = props["E"] * props["strength"] # Approximate Capacity
+                ratio = abs(force) / capacity
+                
+                pct = ratio * 100.0
+                if pct > max_perc: max_perc = pct
+                    
+                if ratio >= 1.0:
+                    self.broken_beams.add(beam)
+            
+            self.graph.update(max_val, max_perc, "ANALYSIS")
         else:
-            self.graph.update(0, "BUILD")
+            self.graph.update(0, 0, "BUILD")
 
-        if self.vol_timer > 0:
-            self.vol_timer -= 1
+        if self.vol_timer > 0: self.vol_timer -= 1
 
     def draw(self):
         self.grid.draw(self.screen)
@@ -260,30 +250,71 @@ class BridgeBuilderApp:
 
     def draw_analysis_results(self):
          if not self.static_solver: return
+         
+         view_mode = self.prop_menu.view_mode 
+         text_mode = self.prop_menu.text_mode
+         
          for node in self.bridge.nodes:
             pos = self.grid.world_to_screen(node.x, node.y)
             color = (200, 50, 50) if node.fixed else (100, 100, 100)
             pygame.draw.circle(self.screen, color, pos, 6)
+         
          for beam, force in self.static_solver.results.items():
             start = self.grid.world_to_screen(beam.node_a.x, beam.node_a.y)
             end = self.grid.world_to_screen(beam.node_b.x, beam.node_b.y)
-            if force < 0: color = (50, 50, 255) 
-            else:         color = (255, 50, 50)
-            width = 8
+            
+            color = (100, 100, 100)
+            
+            props = MaterialManager.get_properties(beam.type, beam.hollow)
+            thickness = props['thickness']
+            
+            # --- Visual Thickness ---
+            # Map thickness (m) to pixels. 0.1m * 40ppm = 4px
+            width = max(1, int(thickness * PPM))
+            
+            capacity = props["E"] * props["strength"]
+            ratio = abs(force) / capacity
+            
+            if view_mode == 0: 
+                if force < 0: color = (50, 50, 255) 
+                else:         color = (255, 50, 50) 
+            
+            elif view_mode == 1: 
+                color = beam.color
+                
+            elif view_mode == 2: 
+                if beam in self.broken_beams:
+                    color = (0, 0, 0)
+                else:
+                    base_c = beam.color
+                    target_c = (255, 0, 0)
+                    t = min(1.0, ratio) 
+                    r = int(base_c[0] + (target_c[0] - base_c[0]) * t)
+                    g = int(base_c[1] + (target_c[1] - base_c[1]) * t)
+                    b = int(base_c[2] + (target_c[2] - base_c[2]) * t)
+                    color = (r, g, b)
+
             pygame.draw.line(self.screen, color, start, end, width)
             
             if beam.hollow:
-                 pygame.draw.line(self.screen, (255,255,255), start, end, 3)
+                 # Ensure hollow line is thinner than the main line
+                 inner_w = max(1, width - 4)
+                 pygame.draw.line(self.screen, (255,255,255), start, end, inner_w)
 
-            mx = (start[0] + end[0]) // 2
-            my = (start[1] + end[1]) // 2
-            label = f"{int(abs(force))}N"
-            text = self.font.render(label, True, (255, 255, 255))
-            bg_rect = text.get_rect(center=(mx, my))
-            bg_rect.inflate_ip(10, 6)
-            pygame.draw.rect(self.screen, (0, 0, 0), bg_rect)
-            pygame.draw.rect(self.screen, color, bg_rect, 2) 
-            self.screen.blit(text, text.get_rect(center=(mx, my)))
+            if text_mode != 2: 
+                mx = (start[0] + end[0]) // 2
+                my = (start[1] + end[1]) // 2
+                
+                label = ""
+                if text_mode == 0: label = f"{int(abs(force))}N"
+                elif text_mode == 1: label = f"{int(ratio * 100)}%"
+                    
+                text = self.font.render(label, True, (255, 255, 255))
+                bg_rect = text.get_rect(center=(mx, my))
+                bg_rect.inflate_ip(10, 6)
+                pygame.draw.rect(self.screen, (0, 0, 0), bg_rect)
+                pygame.draw.rect(self.screen, color, bg_rect, 2) 
+                self.screen.blit(text, text.get_rect(center=(mx, my)))
 
     def draw_volume_popup(self):
             if self.vol_timer <= 0: return

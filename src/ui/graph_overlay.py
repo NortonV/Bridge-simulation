@@ -3,7 +3,8 @@ import pygame
 class GraphOverlay:
     def __init__(self, x, y, width, height):
         self.rect = pygame.Rect(x, y, width, height)
-        self.history = [] # Stores (value, mode) tuples
+        # Stores (value, percent, mode) tuples
+        self.history = [] 
         self.max_len = width # 1 pixel per data point
         self.visible = False
         
@@ -17,11 +18,11 @@ class GraphOverlay:
         self.history = []
         self.eng_max_peak = 100.0
 
-    def update(self, value, mode):
+    def update(self, value, percent, mode):
         if not self.visible: return
 
         # Update History
-        self.history.append((value, mode))
+        self.history.append((value, percent, mode))
         if len(self.history) > self.max_len:
             self.history.pop(0)
 
@@ -29,58 +30,64 @@ class GraphOverlay:
         if mode == "ANALYSIS":
             if value > self.eng_max_peak:
                 self.eng_max_peak = value
+            # Ensure graph fits percentage too
+            if percent > self.eng_max_peak:
+                self.eng_max_peak = percent
 
     def draw(self, surface):
         if not self.visible: return
 
-        # 1. Draw Background / Frame
         s = pygame.Surface((self.rect.width, self.rect.height))
-        s.set_alpha(200) # Semi-transparent black
+        s.set_alpha(200)
         s.fill((20, 20, 20))
         surface.blit(s, self.rect)
         pygame.draw.rect(surface, (100, 100, 100), self.rect, 2)
 
-        if not self.history: 
-            return
+        if not self.history: return
 
-        # 2. Determine Scale based on current mode
         y_max = self.eng_max_peak
-        label = "Max Internal Force"
-        unit = "N"
-        color = (255, 100, 100) # Red for Engineering
+        label_red = "Force (N)"
+        label_green = "Load (%)"
 
-        # 3. Draw Plot Lines
-        points = []
-        for i, (val, mode) in enumerate(self.history):
-            # Only draw points if mode is ANALYSIS
+        points_force = []
+        points_load = []
+        
+        for i, (val, perc, mode) in enumerate(self.history):
             if mode != "ANALYSIS": continue
 
             px = self.rect.x + i
-            # Normalize height: (val / y_max)
-            # Clamp to 0.0 - 1.0 safety
-            if y_max == 0: norm = 0
-            else: norm = min(1.5, val / y_max) # Allow slight overflow before clipping
             
-            py = self.rect.bottom - (norm * self.rect.height)
-            points.append((px, py))
+            if y_max == 0: 
+                norm_f = 0
+                norm_p = 0
+            else: 
+                norm_f = min(1.5, val / y_max)
+                norm_p = min(1.5, perc / y_max)
+            
+            py_f = self.rect.bottom - (norm_f * self.rect.height)
+            py_p = self.rect.bottom - (norm_p * self.rect.height)
+            
+            points_force.append((px, py_f))
+            points_load.append((px, py_p))
 
-        if len(points) > 1:
-            pygame.draw.lines(surface, color, False, points, 2)
+        if len(points_force) > 1:
+            pygame.draw.lines(surface, (255, 80, 80), False, points_force, 2)
+        if len(points_load) > 1:
+            pygame.draw.lines(surface, (80, 255, 80), False, points_load, 2)
 
-        # 4. Draw UI Labels
         font = pygame.font.SysFont("arial", 12)
         
-        # Top Label (Max Y)
-        top_txt = f"{int(y_max)} {unit}"
-        
-        # Current Value Label
-        current_val = self.history[-1][0]
-        curr_txt = f"{int(current_val)} {unit}"
-
-        # Render Text
+        top_txt = f"{int(y_max)}"
         surface.blit(font.render(top_txt, True, (150, 150, 150)), (self.rect.x + 5, self.rect.y + 5))
-        surface.blit(font.render(label, True, color), (self.rect.x + 5, self.rect.bottom - 20))
         
-        # Value at cursor
-        val_surf = font.render(curr_txt, True, (255, 255, 255))
-        surface.blit(val_surf, (self.rect.right - 50, self.rect.bottom - 35))
+        surface.blit(font.render(label_red, True, (255, 80, 80)), (self.rect.x + 5, self.rect.bottom - 35))
+        surface.blit(font.render(label_green, True, (80, 255, 80)), (self.rect.x + 5, self.rect.bottom - 20))
+        
+        curr_force = self.history[-1][0]
+        curr_perc = self.history[-1][1]
+        
+        surf_f = font.render(f"{int(curr_force)}N", True, (255, 80, 80))
+        surf_p = font.render(f"{int(curr_perc)}%", True, (80, 255, 80))
+        
+        surface.blit(surf_f, (self.rect.right - 50, self.rect.bottom - 35))
+        surface.blit(surf_p, (self.rect.right - 50, self.rect.bottom - 20))
