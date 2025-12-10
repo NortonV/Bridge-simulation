@@ -1,4 +1,5 @@
 import pygame
+import math
 from core.constants import *
 from entities.beam import BeamType
 from core.material_manager import MaterialManager
@@ -35,6 +36,7 @@ class Editor:
 
         # HOLD LEFT CLICK -> DELETE
         if mouse_pressed[0] and tool["type"] == "DELETE":
+            # 1. DELETE NODE (Only if NOT fixed/red)
             if self.hover_node and not self.hover_node.fixed:
                 to_remove = [b for b in self.bridge.beams if b.node_a == self.hover_node or b.node_b == self.hover_node]
                 for b in to_remove: 
@@ -44,7 +46,10 @@ class Editor:
                 self.hover_node = None
                 return
             
+            # 2. DELETE BEAM
             if self.hover_beam:
+                # We allow deleting beams connected to red nodes, 
+                # but NOT deleting the red nodes themselves (handled above).
                 if self.hover_beam in self.bridge.beams:
                     self.bridge.beams.remove(self.hover_beam)
                 self.hover_beam = None
@@ -64,9 +69,11 @@ class Editor:
         if event.type == pygame.MOUSEMOTION and self.drag_node:
             self.drag_node.x = wx
             self.drag_node.y = wy
-            # Auto-anchor if below ground
+            # Auto-anchor if below ground (0 floor)
             if self.drag_node.y <= 0: self.drag_node.fixed = True
-            else: self.drag_node.fixed = False
+            
+            # Note: We do NOT un-fix a node if it is dragged into the air. 
+            # If it was red (fixed), it stays red.
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 3: # Right Click Start Drag
@@ -74,15 +81,15 @@ class Editor:
                     self.drag_node = self.hover_node
             
             if event.button == 1: # Left Click
-                # Delete is now also handled in continuous_input, 
-                # but we keep click logic for single precise clicks.
                 if tool_type == "DELETE":
+                    # 1. DELETE NODE (Only if NOT fixed)
                     if self.hover_node and not self.hover_node.fixed:
                         to_remove = [b for b in self.bridge.beams if b.node_a == self.hover_node or b.node_b == self.hover_node]
                         for b in to_remove: self.bridge.beams.remove(b)
                         self.bridge.nodes.remove(self.hover_node)
                         self.hover_node = None
                         return
+                    # 2. DELETE BEAM
                     if self.hover_beam:
                         self.bridge.beams.remove(self.hover_beam)
                         self.hover_beam = None
@@ -103,19 +110,57 @@ class Editor:
                     self.start_node = self.bridge.add_node(wx, wy, is_anchor)
 
         elif event.type == pygame.MOUSEBUTTONUP:
-            # --- Right Click Release (Drop Node) ---
+            # --- Right Click Release (Drop Node / Merge) ---
             if event.button == 3 and self.drag_node:
                 # 1. Check for Node Merge
-                target_node = self.bridge.get_node_at(self.drag_node.x, self.drag_node.y)
+                # FIX: Explicitly find a node that is NOT the one we are dragging
+                target_node = None
+                for n in self.bridge.nodes:
+                    if n == self.drag_node: continue
+                    dist = math.hypot(n.x - self.drag_node.x, n.y - self.drag_node.y)
+                    if dist < 0.4: # Same threshold as get_node_at
+                        target_node = n
+                        break
                 
-                if target_node and target_node != self.drag_node:
+                if target_node:
+                    # --- NODE MERGE LOGIC ---
+                    
+                    node_to_keep = None
+                    node_to_remove = None
+                    respawn_red_node = False
+                    
+                    drag_fixed = self.drag_node.fixed
+                    target_fixed = target_node.fixed
+                    
+                    # Case 1: Red + Red
+                    if drag_fixed and target_fixed:
+                        # Delete one, keep target, respawn new red node at Center
+                        node_to_keep = target_node
+                        node_to_remove = self.drag_node
+                        respawn_red_node = True
+                    
+                    # Case 2: Red dragged onto Normal (Red wins)
+                    elif drag_fixed and not target_fixed:
+                        node_to_keep = self.drag_node
+                        node_to_remove = target_node
+                        
+                    # Case 3: Normal dragged onto Red (Red wins)
+                    elif not drag_fixed and target_fixed:
+                        node_to_keep = target_node
+                        node_to_remove = self.drag_node
+                        
+                    # Case 4: Normal + Normal
+                    else:
+                        node_to_keep = target_node
+                        node_to_remove = self.drag_node
+                    
                     # Redirect beams
                     beams_to_remove = []
                     for beam in self.bridge.beams:
-                        if beam.node_a == self.drag_node:
-                            beam.node_a = target_node
-                        elif beam.node_b == self.drag_node:
-                            beam.node_b = target_node
+                        if beam.node_a == node_to_remove:
+                            beam.node_a = node_to_keep
+                        elif beam.node_b == node_to_remove:
+                            beam.node_b = node_to_keep
                         
                         if beam.node_a == beam.node_b:
                             beams_to_remove.append(beam)
@@ -123,8 +168,34 @@ class Editor:
                     for b in beams_to_remove:
                         if b in self.bridge.beams: self.bridge.beams.remove(b)
                     
-                    if self.drag_node in self.bridge.nodes:
-                        self.bridge.nodes.remove(self.drag_node)
+                    if node_to_remove in self.bridge.nodes:
+                        self.bridge.nodes.remove(node_to_remove)
+                        
+                    # RESPAWN LOGIC for Red+Red merge
+                    if respawn_red_node:
+                        # Try to spawn at (0, 10), then (0, 15), etc.
+                        sx, sy = 0, 10
+                        while True:
+                            existing = self.bridge.get_node_at(sx, sy)
+                            
+                            if not existing:
+                                # Spot is free, spawn new red node here
+                                self.bridge.add_node(sx, sy, fixed=True)
+                                break
+                            
+                            if not existing.fixed:
+                                # Spot occupied by NON-RED node. Overwrite it.
+                                # "Overwrite" implies converting it to a red node.
+                                existing.fixed = True
+                                existing.x = sx
+                                existing.y = sy
+                                existing.start_x = sx
+                                existing.start_y = sy
+                                break
+                            
+                            # Spot occupied by RED node. Move up 1 big square (5m).
+                            sy += 5
+                            if sy > 100: break # Safety break to prevent infinite loop
                         
                     self.audio.play_sfx("wood_place")
                 
@@ -184,7 +255,9 @@ class Editor:
             pos = self.grid.world_to_screen(node.x, node.y)
             color = (200, 50, 50) if node.fixed else (50, 50, 50)
             if node == self.hover_node: 
-                if self.toolbar.selected_tool["type"] == "DELETE": color = (255, 0, 0) 
+                if self.toolbar.selected_tool["type"] == "DELETE": 
+                    # Only turn red if it is deletable (not fixed)
+                    if not node.fixed: color = (255, 0, 0) 
                 else: color = COLOR_CURSOR 
             pygame.draw.circle(surface, color, pos, 7)
             pygame.draw.circle(surface, (255,255,255), pos, 7, 2)

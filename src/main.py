@@ -38,9 +38,12 @@ class BridgeBuilderApp:
         self.status_message = None
         self.message_timer = 0
         
-        self.bridge.add_node(-10, 5, fixed=True)
-        self.bridge.add_node(10, 5, fixed=True)
-        self.bridge.add_node(0, -2, fixed=True)
+        # --- UPDATED DEFAULT SCENE ---
+        # Only 2 red nodes.
+        # Moved 1 big square (5m) up and out from previous.
+        self.bridge.add_node(-15, 10, fixed=True)
+        self.bridge.add_node(15, 10, fixed=True)
+        # The center floor node (0, -2) is intentionally removed.
 
         self.audio = AudioManager()
         self.audio.load_music("theme.mp3")

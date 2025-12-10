@@ -5,6 +5,8 @@ class Node:
         self.x = x
         self.y = y
         self.fixed = fixed # True = Anchor (Cliff/Ground)
+        self.start_x = x
+        self.start_y = y
 
 class Bridge:
     def __init__(self):
