@@ -3,7 +3,7 @@
 -Realistic default material properties. These should be in the middle of the slider. Option to make the agent even heavier. New sliders?
 -In analysis mode, if a vine gets compressed, it should throw a visual error and stuff
 
--Editor mode bugs (nodes  not connecting, etc)
+-Editor mode bugs (nodes  not connecting when placing, only when moving; etc)
 -Fix sound effects (creaking is weird, some sounds feel delayed, steps should be better, etc)
 
 -Background by gergő

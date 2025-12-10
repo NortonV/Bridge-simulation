@@ -81,6 +81,16 @@ class Bridge:
         
         return new_node
     
+    def split_beam_with_node(self, beam, node):
+        if beam not in self.beams: return
+        if node == beam.node_a or node == beam.node_b: return
+
+        self.beams.remove(beam)
+        b1 = self.add_beam_direct(beam.node_a, node, beam.type)
+        if b1: b1.hollow = beam.hollow
+        b2 = self.add_beam_direct(node, beam.node_b, beam.type)
+        if b2: b2.hollow = beam.hollow
+
     def split_beam_if_intersecting_node(self, beam):
         """
         Checks if any existing node lies on the beam (but is not connected to it).
