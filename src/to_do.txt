@@ -1,16 +1,15 @@
 -Watch the course, implement the physics from there?
 -Or just fact check the physics and try to improve it if needed
-
--Graphics overhaul: remove center node, drawing by Gergő (background, agent), make the menus better, make the texts better and hungarian, add more explanations, make color coding in analysis better, make the graph better, idk
--Make the keybinds better (different keys, hold down to delete, etc)
 -Realistic default material properties. These should be in the middle of the slider. Option to make the agent even heavier. New sliders?
 -In analysis mode, if a vine gets compressed, it should throw a visual error and stuff
--In editor mode, there are still some bugs with dragging nodes
+
+-Editor mode bugs (nodes  not connecting, etc)
 -Fix sound effects (creaking is weird, some sounds feel delayed, steps should be better, etc)
--Any more features needed?
+
+-Background by gergő
 -Add a few default bridges that can be loaded (at least what we will build)
--Red nodes movable in edit mode
-...
+-Any more features needed?
+
 -Send it over to the bois for beta testing
 -Refactor the code, add lots of comments, I should understand it all
 -Make it installable
