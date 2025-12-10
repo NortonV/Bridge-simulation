@@ -73,6 +73,7 @@ class PropertyMenu:
         self.x = screen_w - self.w
         self.y = 0
         self.visible = False
+        self.should_quit = False
         
         self.sliders = []
         self.buttons = []
@@ -116,6 +117,13 @@ class PropertyMenu:
         
         r2 = pygame.Rect(self.x + 20, start_y + 40, btn_w, btn_h)
         self.buttons.append(Button("Toggle Text Overlay", r2, self.toggle_text_mode))
+        
+        # NEW: Quit Button
+        r_quit = pygame.Rect(self.x + 20, self.h - 120, btn_w, btn_h)
+        self.buttons.append(Button("Quit Program", r_quit, self.trigger_quit))
+
+    def trigger_quit(self):
+        self.should_quit = True
 
     def toggle_view_mode(self):
         self.view_mode = (self.view_mode + 1) % 3
@@ -194,5 +202,5 @@ class PropertyMenu:
         txt = info_font.render(f"Placement Mode: {mode}", True, col)
         surface.blit(txt, (self.x + 20, self.h - 60))
         
-        txt2 = info_font.render("[J] Solid  |  [H] Hollow", True, (150, 150, 150))
+        txt2 = info_font.render("[TAB] Toggle Mode", True, (150, 150, 150))
         surface.blit(txt2, (self.x + 20, self.h - 40))

@@ -21,6 +21,35 @@ class Editor:
         else:
             self.audio.play_sfx("wood_place")
 
+    def handle_continuous_input(self, world_pos):
+        """Called every frame to handle holding down mouse buttons (e.g., Delete)."""
+        wx, wy = world_pos
+        mouse_pressed = pygame.mouse.get_pressed()
+        tool = self.toolbar.selected_tool
+        
+        # Recalculate hover each frame for smooth deletion
+        self.hover_node = self.bridge.get_node_at(wx, wy)
+        self.hover_beam = None
+        if not self.hover_node:
+            self.hover_beam = self.bridge.get_beam_at(wx, wy)
+
+        # HOLD LEFT CLICK -> DELETE
+        if mouse_pressed[0] and tool["type"] == "DELETE":
+            if self.hover_node and not self.hover_node.fixed:
+                to_remove = [b for b in self.bridge.beams if b.node_a == self.hover_node or b.node_b == self.hover_node]
+                for b in to_remove: 
+                    if b in self.bridge.beams: self.bridge.beams.remove(b)
+                if self.hover_node in self.bridge.nodes:
+                    self.bridge.nodes.remove(self.hover_node)
+                self.hover_node = None
+                return
+            
+            if self.hover_beam:
+                if self.hover_beam in self.bridge.beams:
+                    self.bridge.beams.remove(self.hover_beam)
+                self.hover_beam = None
+                return
+
     def handle_input(self, event, world_pos):
         wx, wy = world_pos
         self.hover_node = self.bridge.get_node_at(wx, wy)
@@ -35,6 +64,7 @@ class Editor:
         if event.type == pygame.MOUSEMOTION and self.drag_node:
             self.drag_node.x = wx
             self.drag_node.y = wy
+            # Auto-anchor if below ground
             if self.drag_node.y <= 0: self.drag_node.fixed = True
             else: self.drag_node.fixed = False
 
@@ -44,6 +74,8 @@ class Editor:
                     self.drag_node = self.hover_node
             
             if event.button == 1: # Left Click
+                # Delete is now also handled in continuous_input, 
+                # but we keep click logic for single precise clicks.
                 if tool_type == "DELETE":
                     if self.hover_node and not self.hover_node.fixed:
                         to_remove = [b for b in self.bridge.beams if b.node_a == self.hover_node or b.node_b == self.hover_node]
@@ -73,13 +105,11 @@ class Editor:
         elif event.type == pygame.MOUSEBUTTONUP:
             # --- Right Click Release (Drop Node) ---
             if event.button == 3 and self.drag_node:
-                # MERGE LOGIC START
-                # Check if we dropped the node onto ANOTHER node
+                # 1. Check for Node Merge
                 target_node = self.bridge.get_node_at(self.drag_node.x, self.drag_node.y)
                 
-                # If we found a node, and it's not the one we are dragging
                 if target_node and target_node != self.drag_node:
-                    # 1. Redirect all beams from drag_node to target_node
+                    # Redirect beams
                     beams_to_remove = []
                     for beam in self.bridge.beams:
                         if beam.node_a == self.drag_node:
@@ -87,30 +117,33 @@ class Editor:
                         elif beam.node_b == self.drag_node:
                             beam.node_b = target_node
                         
-                        # Check if beam is now zero-length (connected to itself)
                         if beam.node_a == beam.node_b:
                             beams_to_remove.append(beam)
                     
-                    # 2. Remove invalid beams
                     for b in beams_to_remove:
-                        if b in self.bridge.beams:
-                            self.bridge.beams.remove(b)
+                        if b in self.bridge.beams: self.bridge.beams.remove(b)
                     
-                    # 3. Remove the drag_node (it has been merged)
                     if self.drag_node in self.bridge.nodes:
                         self.bridge.nodes.remove(self.drag_node)
                         
-                    # 4. Play snap sound (optional feedback)
                     self.audio.play_sfx("wood_place")
-                # MERGE LOGIC END
                 
                 else:
+                    # 2. Check for Beam Snap (New Feature)
+                    target_beam = self.bridge.get_beam_at(self.drag_node.x, self.drag_node.y)
+                    if target_beam:
+                         # We dropped an existing node onto a beam.
+                         # We want to split that beam and insert this node.
+                         self.bridge.split_beam_with_node(target_beam, self.drag_node)
+                         self.audio.play_sfx("wood_place")
+
                     # Just playing sound if valid placement
-                    connected = [b for b in self.bridge.beams if b.node_a == self.drag_node or b.node_b == self.drag_node]
-                    if connected:
-                        has_wood = any(b.type in [BeamType.WOOD, BeamType.BAMBOO] for b in connected)
-                        if has_wood: self.audio.play_sfx("wood_place")
-                        else: self.audio.play_sfx("vine_place")
+                    else:
+                        connected = [b for b in self.bridge.beams if b.node_a == self.drag_node or b.node_b == self.drag_node]
+                        if connected:
+                            has_wood = any(b.type in [BeamType.WOOD, BeamType.BAMBOO] for b in connected)
+                            if has_wood: self.audio.play_sfx("wood_place")
+                            else: self.audio.play_sfx("vine_place")
                 
                 self.drag_node = None
 
@@ -119,11 +152,9 @@ class Editor:
                 if tool_type != "DELETE":
                     end_node = self.hover_node
                     if not end_node:
-                        # If released over empty space, create a node there
                         is_anchor = (wy <= 0)
                         end_node = self.bridge.add_node(wx, wy, is_anchor)
                     
-                    # Prevent zero-length beams
                     if self.start_node != end_node:
                         created_beams = self.bridge.add_beam(self.start_node, end_node, tool_type)
                         

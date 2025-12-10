@@ -79,19 +79,28 @@ class BridgeBuilderApp:
             self.vol_display_val = self.audio.volume
             self.vol_timer = 120
 
+        # --- Continuous Editor Input (Hold to Delete) ---
+        if self.mode == "BUILD":
+            self.editor.handle_continuous_input(world_pos)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT: self.quit()
-            if self.prop_menu.handle_input(event): continue 
+            if self.prop_menu.handle_input(event):
+                if self.prop_menu.should_quit:
+                    self.quit()
+                continue 
             
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE: self.quit()
+                if event.key == pygame.K_ESCAPE: 
+                     self.prop_menu.toggle()
+                
                 if event.key == pygame.K_m: self.prop_menu.toggle()
-                if event.key == pygame.K_j:
-                    MaterialManager.PLACEMENT_MODE_HOLLOW = False
-                    self.show_status("Mode: SOLID")
-                if event.key == pygame.K_h:
-                    MaterialManager.PLACEMENT_MODE_HOLLOW = True
-                    self.show_status("Mode: HOLLOW")
+                
+                if event.key == pygame.K_TAB:
+                    MaterialManager.PLACEMENT_MODE_HOLLOW = not MaterialManager.PLACEMENT_MODE_HOLLOW
+                    mode_str = "HOLLOW" if MaterialManager.PLACEMENT_MODE_HOLLOW else "SOLID"
+                    self.show_status(f"Mode: {mode_str}")
+
                 if event.key == pygame.K_g: self.graph.toggle()
 
                 is_ctrl = (keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL])
@@ -106,10 +115,21 @@ class BridgeBuilderApp:
                         if success: self.show_status(msg)
                         else: self.show_error(msg)
                         self.graph.reset_data()
-                        
-                if event.key == pygame.K_a:
-                    if self.mode == "BUILD": self.run_static_analysis()
-                    elif self.mode == "ANALYSIS": self.stop_analysis()
+                
+                # --- SPACE to Analyze ---
+                if event.key == pygame.K_SPACE:
+                    if self.mode == "BUILD": 
+                        self.run_static_analysis()
+                    elif self.mode == "ANALYSIS": 
+                        self.stop_analysis()
+                    continue # Prevents falling through to other checks
+
+                # --- Analysis Mode Controls (Cancel) ---
+                if self.mode == "ANALYSIS":
+                    # We check for SPACE above, so here we check other cancellation keys
+                    if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_x]:
+                        self.stop_analysis()
+                        continue
 
             if event.type == pygame.MOUSEWHEEL:
                 if event.y != 0:
@@ -119,11 +139,6 @@ class BridgeBuilderApp:
                     self.vol_timer = 120 
 
             self.toolbar.handle_input(event)
-            
-            if self.mode == "ANALYSIS":
-                if event.type == pygame.KEYDOWN:
-                    if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_d]:
-                        self.stop_analysis()
             
             if self.mode == "BUILD":
                 self.editor.handle_input(event, world_pos)
@@ -241,7 +256,7 @@ class BridgeBuilderApp:
             self.screen.blit(text, rect)
         
         if self.mode == "BUILD":
-            help_txt = self.font.render("A: Analyze | M: Materials | J/H: Solid/Hollow", True, (50,50,50))
+            help_txt = self.font.render("Space: Analyze | Tab: Hollow/Solid | X: Delete", True, (50,50,50))
             self.screen.blit(help_txt, (self.screen.get_width() - 650, 20))
         
         self.draw_volume_popup()

@@ -9,10 +9,10 @@ class Toolbar:
         
         # Tools
         self.tools = [
-            {"name": "Bamboo", "key": "1", "type": BeamType.BAMBOO, "color": COLOR_BAMBOO},
-            {"name": "Vine", "key": "2", "type": BeamType.VINE, "color": COLOR_VINE},
-            {"name": "Wood", "key": "3", "type": BeamType.WOOD, "color": COLOR_WOOD},
-            {"name": "Delete", "key": "D", "type": "DELETE", "color": (200, 50, 50)}
+            {"name": "Wood", "key": "1", "type": BeamType.WOOD, "color": COLOR_WOOD},
+            {"name": "Bamboo", "key": "2", "type": BeamType.BAMBOO, "color": COLOR_BAMBOO},
+            {"name": "Vine", "key": "3", "type": BeamType.VINE, "color": COLOR_VINE},
+            {"name": "Delete", "key": "X", "type": "DELETE", "color": (200, 50, 50)}
         ]
         self.active_index = 0 
 
@@ -25,7 +25,7 @@ class Toolbar:
             if event.key == pygame.K_1: self.active_index = 0
             if event.key == pygame.K_2: self.active_index = 1
             if event.key == pygame.K_3: self.active_index = 2
-            if event.key == pygame.K_d: self.active_index = 3
+            if event.key == pygame.K_x: self.active_index = 3
 
     def draw(self, surface):
         # Draw Panel Background
