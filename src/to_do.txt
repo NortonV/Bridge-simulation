@@ -5,6 +5,7 @@
 
 -Editor mode bugs (nodes  not connecting when placing, only when moving; etc)
 -Fix sound effects (creaking is weird, some sounds feel delayed, steps should be better, etc)
+-Nézet váltása és felirat váltása hotkey
 
 -Background by gergő
 -Add a few default bridges that can be loaded (at least what we will build)
