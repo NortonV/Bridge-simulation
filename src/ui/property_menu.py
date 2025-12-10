@@ -1,4 +1,5 @@
 import pygame
+from core.constants import *
 from core.material_manager import MaterialManager
 
 class Button:
@@ -14,20 +15,23 @@ class Button:
             self.callback()
 
     def draw(self, surface):
-        color = (80, 80, 100) if self.hover else (60, 60, 70)
-        pygame.draw.rect(surface, color, self.rect, border_radius=5)
-        pygame.draw.rect(surface, (150, 150, 150), self.rect, 1, border_radius=5)
+        # Stone button style
+        color = (70, 80, 70) if self.hover else (50, 60, 50)
+        pygame.draw.rect(surface, color, self.rect, border_radius=6)
         
-        font = pygame.font.SysFont("arial", 12)
-        txt = font.render(self.label, True, (255, 255, 255))
+        border_col = COLOR_UI_BORDER if self.hover else (120, 120, 120)
+        pygame.draw.rect(surface, border_col, self.rect, 2, border_radius=6)
+        
+        font = pygame.font.SysFont("arial", 13, bold=True)
+        txt = font.render(self.label, True, COLOR_TEXT_MAIN)
         tx = self.rect.centerx - txt.get_width() // 2
         ty = self.rect.centery - txt.get_height() // 2
         surface.blit(txt, (tx, ty))
 
 class Slider:
-    def __init__(self, label, key, min_v, max_v, parent_dict, dict_key):
+    def __init__(self, label, unit, min_v, max_v, parent_dict, dict_key):
         self.label = label
-        self.key = key 
+        self.unit = unit # e.g. "kg", "N"
         self.min_v = min_v
         self.max_v = max_v
         self.parent_dict = parent_dict 
@@ -36,39 +40,45 @@ class Slider:
 
     def update(self, rect, mouse_pos, mouse_down):
         mx, my = mouse_pos
-        curr = self.parent_dict[self.dict_key]
         
         if mouse_down:
-            if rect.collidepoint(mx, my):
+            if rect.collidepoint(mx, my) or self.dragging:
                 self.dragging = True
+                ratio = (mx - rect.x) / rect.width
+                ratio = max(0.0, min(1.0, ratio))
+                new_val = self.min_v + ratio * (self.max_v - self.min_v)
+                self.parent_dict[self.dict_key] = new_val
         else:
             self.dragging = False
-            
-        if self.dragging:
-            ratio = (mx - rect.x) / rect.width
-            ratio = max(0.0, min(1.0, ratio))
-            new_val = self.min_v + ratio * (self.max_v - self.min_v)
-            self.parent_dict[self.dict_key] = new_val
 
     def draw(self, surface, rect):
         curr = self.parent_dict[self.dict_key]
         
-        pygame.draw.rect(surface, (50, 50, 50), rect)
+        # Label above slider
+        font = pygame.font.SysFont("arial", 12)
+        val_str = f"{curr:.2f} {self.unit}"
+        label_txt = font.render(f"{self.label}", True, (200, 200, 200))
+        val_txt = font.render(val_str, True, COLOR_TEXT_HIGHLIGHT)
         
+        surface.blit(label_txt, (rect.x, rect.y - 18))
+        surface.blit(val_txt, (rect.right - val_txt.get_width(), rect.y - 18))
+
+        # Slider Track
+        pygame.draw.rect(surface, (30, 30, 30), rect, border_radius=4)
+        
+        # Slider Fill
         ratio = (curr - self.min_v) / (self.max_v - self.min_v)
         fill_w = int(rect.width * ratio)
         fill_rect = pygame.Rect(rect.x, rect.y, fill_w, rect.height)
-        pygame.draw.rect(surface, (100, 200, 255), fill_rect)
+        pygame.draw.rect(surface, (100, 150, 100), fill_rect, border_radius=4)
         
-        pygame.draw.rect(surface, (150, 150, 150), rect, 1)
-        
-        font = pygame.font.SysFont("arial", 12)
-        txt = font.render(f"{self.label}: {curr:.3f}", True, (255, 255, 255))
-        surface.blit(txt, (rect.x, rect.y - 15))
+        # Handle (Gold Knob)
+        handle_x = rect.x + fill_w
+        pygame.draw.circle(surface, COLOR_UI_BORDER, (handle_x, rect.centery), 6)
 
 class PropertyMenu:
     def __init__(self, screen_w, screen_h):
-        self.w = 260
+        self.w = 280
         self.h = screen_h
         self.x = screen_w - self.w
         self.y = 0
@@ -78,49 +88,50 @@ class PropertyMenu:
         self.sliders = []
         self.buttons = []
         
+        # View Modes
         self.view_mode = 1 # 0=Stress, 1=Texture, 2=Gradient
         self.text_mode = 0 # 0=Value, 1=Percent, 2=None
         
         self.setup_ui()
 
     def setup_ui(self):
-        # --- Sliders ---
-        # Wood
-        self.sliders.append(Slider("Wood Stiffness", "E", 100, 5000, MaterialManager.MATERIALS["wood"], "E"))
-        self.sliders.append(Slider("Wood Density", "density", 0.1, 5.0, MaterialManager.MATERIALS["wood"], "density"))
-        self.sliders.append(Slider("Wood Strength", "strength", 0.001, 0.2, MaterialManager.MATERIALS["wood"], "strength"))
-        self.sliders.append(Slider("Wood Thickness", "thickness", 0.01, 0.5, MaterialManager.MATERIALS["wood"], "thickness"))
+        # Translations to Hungarian
+        # Wood -> Fa
+        self.sliders.append(Slider("Fa Merevség (E)", "GPa", 100, 5000, MaterialManager.MATERIALS["wood"], "E"))
+        self.sliders.append(Slider("Fa Sűrűség", "kg/m", 0.1, 5.0, MaterialManager.MATERIALS["wood"], "density"))
+        self.sliders.append(Slider("Fa Teherbírás", "N", 0.001, 0.2, MaterialManager.MATERIALS["wood"], "strength"))
+        self.sliders.append(Slider("Fa Vastagság", "m", 0.01, 0.5, MaterialManager.MATERIALS["wood"], "thickness"))
         
-        # Bamboo
-        self.sliders.append(Slider("Bamboo Stiffness", "E", 100, 5000, MaterialManager.MATERIALS["bamboo"], "E"))
-        self.sliders.append(Slider("Bamboo Density", "density", 0.1, 5.0, MaterialManager.MATERIALS["bamboo"], "density"))
-        self.sliders.append(Slider("Bamboo Strength", "strength", 0.001, 0.5, MaterialManager.MATERIALS["bamboo"], "strength"))
-        self.sliders.append(Slider("Bamboo Thickness", "thickness", 0.01, 0.5, MaterialManager.MATERIALS["bamboo"], "thickness"))
+        # Bamboo -> Bambusz
+        self.sliders.append(Slider("Bambusz Merevség", "GPa", 100, 5000, MaterialManager.MATERIALS["bamboo"], "E"))
+        self.sliders.append(Slider("Bambusz Sűrűség", "kg/m", 0.1, 5.0, MaterialManager.MATERIALS["bamboo"], "density"))
+        self.sliders.append(Slider("Bambusz Teherbírás", "N", 0.001, 0.5, MaterialManager.MATERIALS["bamboo"], "strength"))
+        self.sliders.append(Slider("Bambusz Vastagság", "m", 0.01, 0.5, MaterialManager.MATERIALS["bamboo"], "thickness"))
 
-        # Vine
-        self.sliders.append(Slider("Vine Stiffness", "E", 10, 500, MaterialManager.MATERIALS["vine"], "E"))
-        self.sliders.append(Slider("Vine Density", "density", 0.1, 5.0, MaterialManager.MATERIALS["vine"], "density"))
-        self.sliders.append(Slider("Vine Strength", "strength", 0.01, 1.0, MaterialManager.MATERIALS["vine"], "strength"))
-        self.sliders.append(Slider("Vine Thickness", "thickness", 0.01, 0.3, MaterialManager.MATERIALS["vine"], "thickness"))
+        # Vine -> Inda
+        self.sliders.append(Slider("Inda Merevség", "GPa", 10, 500, MaterialManager.MATERIALS["vine"], "E"))
+        self.sliders.append(Slider("Inda Sűrűség", "kg/m", 0.1, 5.0, MaterialManager.MATERIALS["vine"], "density"))
+        self.sliders.append(Slider("Inda Teherbírás", "N", 0.01, 1.0, MaterialManager.MATERIALS["vine"], "strength"))
+        self.sliders.append(Slider("Inda Vastagság", "m", 0.01, 0.3, MaterialManager.MATERIALS["vine"], "thickness"))
 
-        # Agent
-        self.sliders.append(Slider("Agent Mass", "mass", 1.0, 500.0, MaterialManager.AGENT, "mass"))
-        self.sliders.append(Slider("Agent Speed", "speed", 1.0, 20.0, MaterialManager.AGENT, "speed"))
+        # Agent -> Ixchel
+        self.sliders.append(Slider("Ixchel Tömege", "kg", 1.0, 500.0, MaterialManager.AGENT, "mass"))
+        self.sliders.append(Slider("Ixchel Sebessége", "m/s", 1.0, 20.0, MaterialManager.AGENT, "speed"))
 
         # --- Buttons ---
-        start_y = 50 + len(self.sliders) * 40 + 20
-        btn_w = 200
-        btn_h = 30
+        # Adjusted spacing
+        start_y = 60 + len(self.sliders) * 42 + 20
+        btn_w = 220
+        btn_h = 35
         
-        r1 = pygame.Rect(self.x + 20, start_y, btn_w, btn_h)
-        self.buttons.append(Button("Toggle Visual Mode", r1, self.toggle_view_mode))
+        r1 = pygame.Rect(self.x + 30, start_y, btn_w, btn_h)
+        self.buttons.append(Button("Nézet Váltása (V)", r1, self.toggle_view_mode))
         
-        r2 = pygame.Rect(self.x + 20, start_y + 40, btn_w, btn_h)
-        self.buttons.append(Button("Toggle Text Overlay", r2, self.toggle_text_mode))
+        r2 = pygame.Rect(self.x + 30, start_y + 45, btn_w, btn_h)
+        self.buttons.append(Button("Feliratok Váltása (T)", r2, self.toggle_text_mode))
         
-        # NEW: Quit Button
-        r_quit = pygame.Rect(self.x + 20, self.h - 120, btn_w, btn_h)
-        self.buttons.append(Button("Quit Program", r_quit, self.trigger_quit))
+        r_quit = pygame.Rect(self.x + 30, self.h - 80, btn_w, btn_h)
+        self.buttons.append(Button("Kilépés", r_quit, self.trigger_quit))
 
     def trigger_quit(self):
         self.should_quit = True
@@ -153,11 +164,11 @@ class PropertyMenu:
         mx, my = pygame.mouse.get_pos()
         mouse_down = pygame.mouse.get_pressed()[0]
         
-        start_y = 50
-        gap = 40
+        start_y = 60
+        gap = 42
         
         for i, slider in enumerate(self.sliders):
-            rect = pygame.Rect(self.x + 20, start_y + i*gap, 200, 15)
+            rect = pygame.Rect(self.x + 30, start_y + i*gap, 220, 12)
             slider.update(rect, (mx, my), mouse_down)
             
         for btn in self.buttons:
@@ -166,41 +177,47 @@ class PropertyMenu:
     def draw(self, surface):
         if not self.visible: return
         
+        # Panel Background
         s = pygame.Surface((self.w, self.h))
-        s.set_alpha(230)
-        s.fill((20, 20, 30))
+        s.set_alpha(240)
+        s.fill((35, 40, 35))
         surface.blit(s, (self.x, self.y))
-        pygame.draw.line(surface, (100, 100, 100), (self.x, 0), (self.x, self.h), 2)
         
-        font = pygame.font.SysFont("arial", 16, bold=True)
-        h = font.render("Material Properties", True, (255, 255, 255))
-        surface.blit(h, (self.x + 20, 15))
+        # Decorative Left Border
+        pygame.draw.line(surface, COLOR_UI_BORDER, (self.x, 0), (self.x, self.h), 3)
         
-        start_y = 50
-        gap = 40
+        # Header
+        font = pygame.font.SysFont("arial", 20, bold=True)
+        h = font.render("Tulajdonságok", True, COLOR_TEXT_HIGHLIGHT)
+        surface.blit(h, (self.x + 30, 20))
+        
+        # Draw Sliders
+        start_y = 60
+        gap = 42
         for i, slider in enumerate(self.sliders):
-            rect = pygame.Rect(self.x + 20, start_y + i*gap, 200, 15)
+            rect = pygame.Rect(self.x + 30, start_y + i*gap, 220, 12)
             slider.draw(surface, rect)
             
+        # Draw Buttons
         for btn in self.buttons:
             btn.draw(surface)
             
+        # Status Info
         info_font = pygame.font.SysFont("arial", 12)
-        v_modes = ["Stress (Red/Blue)", "Texture (Normal)", "Gradient (Load)"]
-        v_str = f"Visual: {v_modes[self.view_mode]}"
-        v_txt = info_font.render(v_str, True, (200, 200, 200))
-        surface.blit(v_txt, (self.x + 20, self.buttons[0].rect.bottom + 5))
+        
+        # Translated View Modes
+        v_modes = ["Erők (Kék/Piros)", "Anyagminta (Normál)", "Terhelés (Gradiens)"]
+        v_str = f"Nézet: {v_modes[self.view_mode]}"
+        v_txt = info_font.render(v_str, True, (180, 200, 180))
+        surface.blit(v_txt, (self.x + 30, self.buttons[1].rect.bottom + 10))
 
-        t_modes = ["Exact Value", "% Max Load", "None"]
-        t_str = f"Overlay: {t_modes[self.text_mode]}"
-        t_txt = info_font.render(t_str, True, (200, 200, 200))
-        surface.blit(t_txt, (self.x + 20, self.buttons[1].rect.bottom + 5))
+        t_modes = ["Pontos Érték", "% Terhelés", "Nincs"]
+        t_str = f"Adat: {t_modes[self.text_mode]}"
+        t_txt = info_font.render(t_str, True, (180, 200, 180))
+        surface.blit(t_txt, (self.x + 30, self.buttons[1].rect.bottom + 25))
             
-        mode = "HOLLOW" if MaterialManager.PLACEMENT_MODE_HOLLOW else "SOLID"
+        mode = "ÜREGES (Cső)" if MaterialManager.PLACEMENT_MODE_HOLLOW else "TÖMÖR (Rúd)"
         col = (100, 255, 100) if not MaterialManager.PLACEMENT_MODE_HOLLOW else (100, 200, 255)
         
-        txt = info_font.render(f"Placement Mode: {mode}", True, col)
-        surface.blit(txt, (self.x + 20, self.h - 60))
-        
-        txt2 = info_font.render("[TAB] Toggle Mode", True, (150, 150, 150))
-        surface.blit(txt2, (self.x + 20, self.h - 40))
+        txt = info_font.render(f"Építési Mód: {mode}", True, col)
+        surface.blit(txt, (self.x + 30, self.h - 110))

@@ -1,7 +1,7 @@
 -Watch the course, implement the physics from there?
 -Or just fact check the physics and try to improve it if needed
 
--Graphics overhaul: remove center node, drawing by Gergő (background, agent), move the red nodes up and away, make the menus better, make the texts better and hungarian, add more explanations, make color coding in analysis better, make the graph better, idk
+-Graphics overhaul: remove center node, drawing by Gergő (background, agent), make the menus better, make the texts better and hungarian, add more explanations, make color coding in analysis better, make the graph better, idk
 -Make the keybinds better (different keys, hold down to delete, etc)
 -Realistic default material properties. These should be in the middle of the slider. Option to make the agent even heavier. New sliders?
 -In analysis mode, if a vine gets compressed, it should throw a visual error and stuff

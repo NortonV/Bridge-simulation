@@ -10,7 +10,7 @@ class MaterialManager:
     # Strength: Breaking threshold
     # Thickness: Diameter of the beam in meters
     MATERIALS = {
-        "wood":   {"E": 1000.0, "density": 1.0, "strength": 0.015, "max_length": 20, "thickness": 0.1},
+        "wood":   {"E": 1000.0, "density": 1.0, "strength": 0.015, "max_length": None, "thickness": 0.1},
         "bamboo": {"E": 2000.0, "density": 0.5, "strength": 0.100, "max_length": None, "thickness": 0.1},
         "vine":   {"E": 100.0,  "density": 0.2, "strength": 0.300, "max_length": None, "thickness": 0.05}
     }
