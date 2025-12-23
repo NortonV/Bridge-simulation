@@ -1,4 +1,5 @@
 import pygame
+import math
 from core.constants import *
 from core.material_manager import MaterialManager
 
@@ -29,7 +30,7 @@ class Button:
         surface.blit(txt, (tx, ty))
 
 class Slider:
-    def __init__(self, label, unit, min_v, max_v, parent_dict, dict_key):
+    def __init__(self, label, unit, min_v, max_v, parent_dict, dict_key, is_log=False):
         self.label = label
         self.unit = unit 
         self.min_v = min_v
@@ -37,6 +38,7 @@ class Slider:
         self.parent_dict = parent_dict 
         self.dict_key = dict_key       
         self.dragging = False
+        self.is_log = is_log
 
     def update(self, rect, mouse_pos, mouse_down):
         mx, my = mouse_pos
@@ -45,7 +47,14 @@ class Slider:
                 self.dragging = True
                 ratio = (mx - rect.x) / rect.width
                 ratio = max(0.0, min(1.0, ratio))
-                new_val = self.min_v + ratio * (self.max_v - self.min_v)
+                
+                if self.is_log:
+                    # Logarithmic interpolation: val = min * (max/min)^ratio
+                    safe_min = max(1e-9, self.min_v)
+                    new_val = safe_min * (self.max_v / safe_min) ** ratio
+                else:
+                    new_val = self.min_v + ratio * (self.max_v - self.min_v)
+                    
                 self.parent_dict[self.dict_key] = new_val
         else:
             self.dragging = False
@@ -67,7 +76,16 @@ class Slider:
             display_unit = "%"
             
         font = pygame.font.SysFont("arial", 12)
-        val_str = f"{display_val:.1f} {display_unit}"
+        
+        # High precision formatting for small values
+        if abs(display_val) < 0.001:
+            val_str = f"{display_val:.5f} {display_unit}"
+        elif abs(display_val) < 0.1:
+            val_str = f"{display_val:.3f} {display_unit}"
+        elif abs(display_val) < 10.0:
+            val_str = f"{display_val:.2f} {display_unit}"
+        else:
+            val_str = f"{display_val:.1f} {display_unit}"
         
         label_txt = font.render(f"{self.label}", True, (200, 200, 200))
         val_txt = font.render(val_str, True, COLOR_TEXT_HIGHLIGHT)
@@ -77,10 +95,20 @@ class Slider:
 
         pygame.draw.rect(surface, (30, 30, 30), rect, border_radius=4)
         
+        ratio = 0.0
         try:
-            ratio = (curr - self.min_v) / (self.max_v - self.min_v)
+            if self.is_log:
+                safe_min = max(1e-9, self.min_v)
+                safe_curr = max(safe_min, curr)
+                # ratio = log(curr/min) / log(max/min)
+                num = math.log(safe_curr / safe_min)
+                den = math.log(self.max_v / safe_min)
+                ratio = num / den if den != 0 else 0
+            else:
+                ratio = (curr - self.min_v) / (self.max_v - self.min_v)
+            
             ratio = max(0.0, min(1.0, ratio))
-        except ZeroDivisionError:
+        except (ValueError, ZeroDivisionError):
             ratio = 0.0
 
         fill_w = int(rect.width * ratio)
@@ -123,43 +151,55 @@ class PropertyMenu:
             self.temp_slider.dict_key = "base_temp"
             self.temp_slider.label = "Alap Hőm."
 
-    def create_centered_slider(self, label, unit, mat_key, prop_key, range_percent=0.5):
+    def create_centered_slider(self, label, unit, mat_key, prop_key, factor=20.0):
+        # Creates a Log-Scale slider centered on the default value
+        # Min = Default / Factor
+        # Max = Default * Factor
         default_val = MaterialManager.MATERIALS[mat_key][prop_key]
-        min_v = default_val * (1.0 - range_percent)
-        max_v = default_val * (1.0 + range_percent)
-        self.sliders.append(Slider(label, unit, min_v, max_v, MaterialManager.MATERIALS[mat_key], prop_key))
+        min_v = default_val / factor
+        max_v = default_val * factor
+        self.sliders.append(Slider(label, unit, min_v, max_v, MaterialManager.MATERIALS[mat_key], prop_key, is_log=True))
 
     def setup_ui(self):
         # --- WOOD ---
-        self.create_centered_slider("Fa Rugalmasság (E)", "Pa", "wood", "E")
-        self.create_centered_slider("Fa Sűrűség", "kg/m³", "wood", "density")
-        self.create_centered_slider("Fa Szakítószil.", "Pa", "wood", "strength")
-        self.sliders.append(Slider("Fa Átmérő", "m", 0.05, 0.5, MaterialManager.MATERIALS["wood"], "thickness"))
+        self.create_centered_slider("Fa Rugalmasság (E)", "Pa", "wood", "E", factor=20.0)
+        self.create_centered_slider("Fa Sűrűség", "kg/m³", "wood", "density", factor=10.0)
+        self.create_centered_slider("Fa Szakítószil.", "Pa", "wood", "strength", factor=20.0)
+        
+        d_thick = MaterialManager.MATERIALS["wood"]["thickness"]
+        self.sliders.append(Slider("Fa Átmérő", "m", d_thick/20.0, d_thick*20.0, MaterialManager.MATERIALS["wood"], "thickness", is_log=True))
         self.sliders.append(Slider("Fa Üregesség", "%", 0.0, 0.99, MaterialManager.MATERIALS["wood"], "hollow_ratio"))
         
         # --- BAMBOO ---
-        self.create_centered_slider("Bambusz Rugalmasság", "Pa", "bamboo", "E")
-        self.create_centered_slider("Bambusz Sűrűség", "kg/m³", "bamboo", "density")
-        self.create_centered_slider("Bambusz Szakítószil.", "Pa", "bamboo", "strength")
-        self.sliders.append(Slider("Bambusz Átmérő", "m", 0.02, 0.3, MaterialManager.MATERIALS["bamboo"], "thickness"))
+        self.create_centered_slider("Bambusz Rugalmasság", "Pa", "bamboo", "E", factor=20.0)
+        self.create_centered_slider("Bambusz Sűrűség", "kg/m³", "bamboo", "density", factor=10.0)
+        self.create_centered_slider("Bambusz Szakítószil.", "Pa", "bamboo", "strength", factor=20.0)
+        
+        d_thick = MaterialManager.MATERIALS["bamboo"]["thickness"]
+        self.sliders.append(Slider("Bambusz Átmérő", "m", d_thick/20.0, d_thick*20.0, MaterialManager.MATERIALS["bamboo"], "thickness", is_log=True))
         self.sliders.append(Slider("Bambusz Üregesség", "%", 0.0, 0.99, MaterialManager.MATERIALS["bamboo"], "hollow_ratio"))
 
         # --- STEEL ---
-        self.create_centered_slider("Acél Rugalmasság", "Pa", "steel", "E")
-        self.create_centered_slider("Acél Sűrűség", "kg/m³", "steel", "density")
-        self.create_centered_slider("Acél Szakítószil.", "Pa", "steel", "strength")
-        self.sliders.append(Slider("Acél Átmérő", "m", 0.01, 0.2, MaterialManager.MATERIALS["steel"], "thickness"))
+        self.create_centered_slider("Acél Rugalmasság", "Pa", "steel", "E", factor=20.0)
+        self.create_centered_slider("Acél Sűrűség", "kg/m³", "steel", "density", factor=10.0)
+        self.create_centered_slider("Acél Szakítószil.", "Pa", "steel", "strength", factor=20.0)
+        
+        d_thick = MaterialManager.MATERIALS["steel"]["thickness"]
+        self.sliders.append(Slider("Acél Átmérő", "m", d_thick/20.0, d_thick*20.0, MaterialManager.MATERIALS["steel"], "thickness", is_log=True))
 
         # --- SPAGHETTI ---
-        self.create_centered_slider("Spagetti Rugalmasság", "Pa", "spaghetti", "E")
-        self.sliders.append(Slider("Spagetti Átmérő", "m", 0.005, 0.1, MaterialManager.MATERIALS["spaghetti"], "thickness"))
+        self.create_centered_slider("Spagetti Rugalmasság", "Pa", "spaghetti", "E", factor=20.0)
+        
+        d_thick = MaterialManager.MATERIALS["spaghetti"]["thickness"]
+        self.sliders.append(Slider("Spagetti Átmérő", "m", d_thick/20.0, d_thick*20.0, MaterialManager.MATERIALS["spaghetti"], "thickness", is_log=True))
 
         # --- GLOBALS ---
         self.temp_slider = Slider("Alap Hőm.", "°C", 0.0, 50.0, MaterialManager.SETTINGS, "base_temp")
         self.sliders.append(self.temp_slider)
 
-        self.sliders.append(Slider("Ixchel Tömege", "kg", 40.0, 150.0, MaterialManager.AGENT, "mass")) 
-        self.sliders.append(Slider("Ixchel Sebessége", "m/s", 1.0, 10.0, MaterialManager.AGENT, "speed"))
+        d_mass = MaterialManager.AGENT["mass"]
+        self.sliders.append(Slider("Ixchel Tömege", "kg", d_mass/20.0, d_mass*20.0, MaterialManager.AGENT, "mass", is_log=True)) 
+        self.sliders.append(Slider("Ixchel Sebessége", "m/s", 1.0, 20.0, MaterialManager.AGENT, "speed"))
 
         # --- LAYOUT ---
         current_y = self.scroll_area_top + self.content_padding_top
