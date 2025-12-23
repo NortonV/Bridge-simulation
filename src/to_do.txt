@@ -1,10 +1,8 @@
--Loading bridges makes the sliders not work as intended, fix this bug
--In analysis mode, if a vine gets compressed, it should work as a vine would (it only supports tension)
--Freeze game when the bridge breaks, mark the culprit segment with black, maybe even display the cause (too much tension, euler buckling, etc)
-
--Background by gergő
 -Add a few default bridges that can be loaded (at least what we will build)
 -Fix sound effects (creaking is weird, some sounds feel delayed, steps should be better, etc)
+-Ixchel can fly
+-Anti aliasync, hollow has too much hollow
+-Background by gergő
 -Send it over to the bois for beta testing
 -Refactor the code, add lots of comments, I should understand it all
 -Make it installable

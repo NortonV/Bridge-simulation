@@ -94,7 +94,11 @@ class Serializer:
 
             # Load Settings if available
             if "materials" in data:
-                MaterialManager.MATERIALS.update(data["materials"])
+                # FIX: Update sub-dictionaries in-place to preserve references used by UI Sliders
+                for mat_key, mat_props in data["materials"].items():
+                    if mat_key in MaterialManager.MATERIALS:
+                        MaterialManager.MATERIALS[mat_key].update(mat_props)
+            
             if "settings" in data:
                 MaterialManager.SETTINGS.update(data["settings"])
             

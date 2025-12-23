@@ -35,6 +35,7 @@ class BridgeBuilderApp:
         self.mode = "BUILD"
         self.static_solver = None
         self.broken_beams = set()
+        self.simulation_frozen = False # Flag to freeze simulation on break
         
         self.error_message = None
         self.status_message = None
@@ -50,6 +51,8 @@ class BridgeBuilderApp:
         self.audio.load_sfx("wood_place", "wood_place.mp3")
         self.audio.load_sfx("vine_place", "vine_place.mp3")
         self.audio.load_sfx("step", "step.mp3") 
+        self.audio.load_sfx("wood_break", "wood_break.mp3")
+        self.audio.load_sfx("vine_break", "vine_break.mp3")
 
         self.vol_timer = 0
         self.vol_display_val = 0.5
@@ -96,7 +99,18 @@ class BridgeBuilderApp:
                      self.prop_menu.toggle()
                 if event.key == pygame.K_m: self.prop_menu.toggle()
                 
-                # Régi TAB kezelés eltávolítva (a menü csúszkái helyettesítik)
+                # Hotkeys
+                if event.key == pygame.K_v: 
+                    self.prop_menu.toggle_view_mode()
+                if event.key == pygame.K_t: 
+                    self.prop_menu.toggle_text_mode()
+                
+                if event.key == pygame.K_SPACE:
+                    if self.mode == "BUILD": 
+                        self.run_static_analysis()
+                    elif self.mode == "ANALYSIS": 
+                        self.stop_analysis()
+                    continue
 
                 if event.key == pygame.K_g: self.graph.toggle()
 
@@ -113,13 +127,6 @@ class BridgeBuilderApp:
                         else: self.show_error(msg)
                         self.graph.reset_data()
                 
-                if event.key == pygame.K_SPACE:
-                    if self.mode == "BUILD": 
-                        self.run_static_analysis()
-                    elif self.mode == "ANALYSIS": 
-                        self.stop_analysis()
-                    continue
-
                 if self.mode == "ANALYSIS":
                     if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_x]:
                         self.stop_analysis()
@@ -138,7 +145,8 @@ class BridgeBuilderApp:
                 self.editor.handle_input(event, world_pos)
         
         if self.mode == "ANALYSIS":
-            self.ghost_agent.handle_input()
+            if not self.simulation_frozen:
+                self.ghost_agent.handle_input()
 
     def run_static_analysis(self):
         self.ghost_agent.mass = MaterialManager.AGENT["mass"]
@@ -156,6 +164,7 @@ class BridgeBuilderApp:
         else:
             self.static_solver = solver
             self.mode = "ANALYSIS"
+            self.simulation_frozen = False
             self.show_status(f"Szimuláció (Tömeg: {self.ghost_agent.mass:.1f}kg)")
             self.graph.reset_data()
             self.broken_beams.clear()
@@ -175,6 +184,7 @@ class BridgeBuilderApp:
     def stop_analysis(self):
         self.mode = "BUILD"
         self.static_solver = None
+        self.simulation_frozen = False
         self.toolbar.active_index = 0
         self.show_status("Építés Mód")
         self.error_message = None
@@ -194,13 +204,16 @@ class BridgeBuilderApp:
         max_perc = 0.0
         
         if self.mode == "ANALYSIS" and self.static_solver:
+            if self.simulation_frozen:
+                return
+
             self.ghost_agent.mass = MaterialManager.AGENT["mass"]
             load_info = self.ghost_agent.update_static(1.0/60.0, self.bridge.beams)
             
-            # Calculate Temperature Delta
             delta_T = MaterialManager.SETTINGS["sim_temp"] - MaterialManager.SETTINGS["base_temp"]
             self.static_solver.solve(temperature=delta_T, point_load=load_info)
             
+            new_break = False
             for beam in self.bridge.beams:
                 f_axial = abs(self.static_solver.results.get(beam, 0))
                 f_bend = abs(self.static_solver.bending_results.get(beam, 0))
@@ -214,7 +227,20 @@ class BridgeBuilderApp:
                 pct = ratio * 100.0
                 
                 if pct > max_perc: max_perc = pct
-                if ratio >= 1.0: self.broken_beams.add(beam)
+                
+                if ratio >= 1.0: 
+                    if beam not in self.broken_beams:
+                        self.broken_beams.add(beam)
+                        new_break = True
+            
+            if new_break:
+                self.simulation_frozen = True
+                self.show_error("HÍDSZAKADÁS! (Szimuláció Megállítva)")
+                if any(b.type == "vine" for b in self.broken_beams):
+                     self.audio.play_sfx("vine_break")
+                else:
+                     self.audio.play_sfx("wood_break")
+                self.audio.stop_sfx("step")
             
             self.graph.update(max_force_val, max_perc, "ANALYSIS")
         else:
@@ -354,25 +380,31 @@ class BridgeBuilderApp:
 
             color = (100, 100, 100)
             
-            # JAVÍTÁS: A tulajdonságokat a MaterialManager-ből olvassuk ki
             props = MaterialManager.get_properties(beam.type)
             width = max(2, int(props['thickness'] * PPM))
             
-            # Üregesség lekérdezése a MaterialManager-ből
             mat_settings = MaterialManager.MATERIALS.get(beam.type, {})
             hollow_ratio = mat_settings.get("hollow_ratio", 0.0)
             
             ratio = self.static_solver.stress_ratios.get(beam, 0.0)
             
-            if view_mode == 0: 
-                if force < 0: color = COLOR_COMPRESSION 
-                else:         color = COLOR_TENSION
-            elif view_mode == 1: 
-                color = beam.color
-            elif view_mode == 2: 
-                if beam in self.broken_beams:
-                    color = COLOR_BROKEN
-                else:
+            # --- COLORING LOGIC ---
+            if beam in self.broken_beams:
+                 # Draw Red/Black stripes
+                 if len(points) > 1:
+                    for i in range(len(points) - 1):
+                        p_start = points[i]
+                        p_end = points[i+1]
+                        # Alternate colors: Red and Black
+                        seg_color = (255, 0, 0) if (i % 2 == 0) else (0, 0, 0)
+                        pygame.draw.line(self.screen, seg_color, p_start, p_end, width)
+            else:
+                if view_mode == 0: 
+                    if force < 0: color = COLOR_COMPRESSION 
+                    else:         color = COLOR_TENSION
+                elif view_mode == 1: 
+                    color = beam.color
+                elif view_mode == 2: 
                     base_c = beam.color
                     target_c = (255, 50, 50)
                     t = min(1.0, ratio) 
@@ -381,12 +413,11 @@ class BridgeBuilderApp:
                     b = int(base_c[2] + (target_c[2] - base_c[2]) * t)
                     color = (r, g, b)
 
-            if len(points) > 1:
-                pygame.draw.lines(self.screen, color, False, points, width)
+                if len(points) > 1:
+                    pygame.draw.lines(self.screen, color, False, points, width)
             
-            # Üregesség megjelenítése FEHÉR sávval
+            # White hollow inner line (only if not completely solid)
             if hollow_ratio > 0.01 and len(points) > 1:
-                 # Legalább 1 pixel vastag legyen, ha van üreg
                  inner_w = max(1, int(width * hollow_ratio))
                  pygame.draw.lines(self.screen, (255,255,255), False, points, inner_w)
 
