@@ -1,7 +1,7 @@
 import pygame
 import sys
 import math
-import numpy as np  # Make sure you have numpy installed!
+import numpy as np
 from core.constants import *
 from core.grid import Grid
 from entities.bridge import Bridge
@@ -96,10 +96,7 @@ class BridgeBuilderApp:
                      self.prop_menu.toggle()
                 if event.key == pygame.K_m: self.prop_menu.toggle()
                 
-                if event.key == pygame.K_TAB:
-                    MaterialManager.PLACEMENT_MODE_HOLLOW = not MaterialManager.PLACEMENT_MODE_HOLLOW
-                    mode_str = "ÜREGES (Cső)" if MaterialManager.PLACEMENT_MODE_HOLLOW else "TÖMÖR (Rúd)"
-                    self.show_status(f"Mód: {mode_str}")
+                # Régi TAB kezelés eltávolítva (a menü csúszkái helyettesítik)
 
                 if event.key == pygame.K_g: self.graph.toggle()
 
@@ -152,7 +149,7 @@ class BridgeBuilderApp:
             else:
                 self.show_error(solver.error_msg)
             return
-        # Solve with initial 0 temperature
+        
         success = solver.solve(temperature=0.0, point_load=None)
         if not success:
             self.show_error("Instabil: Szinguláris Mátrix")
@@ -164,7 +161,6 @@ class BridgeBuilderApp:
             self.broken_beams.clear()
             self.graph.visible = True
             
-            # Find spawn point
             start_node = None
             min_x = 9999
             for beam in self.bridge.beams:
@@ -198,13 +194,13 @@ class BridgeBuilderApp:
         max_perc = 0.0
         
         if self.mode == "ANALYSIS" and self.static_solver:
-            # 1. Update Physics
             self.ghost_agent.mass = MaterialManager.AGENT["mass"]
             load_info = self.ghost_agent.update_static(1.0/60.0, self.bridge.beams)
-            # Pass temperature (if you had a slider for it, pass it here)
-            self.static_solver.solve(temperature=0.0, point_load=load_info)
             
-            # 2. Find Peaks for Graph
+            # Calculate Temperature Delta
+            delta_T = MaterialManager.SETTINGS["sim_temp"] - MaterialManager.SETTINGS["base_temp"]
+            self.static_solver.solve(temperature=delta_T, point_load=load_info)
+            
             for beam in self.bridge.beams:
                 f_axial = abs(self.static_solver.results.get(beam, 0))
                 f_bend = abs(self.static_solver.bending_results.get(beam, 0))
@@ -229,8 +225,8 @@ class BridgeBuilderApp:
     def draw_ixchel(self, surface, screen_x, screen_y):
         pygame.draw.rect(surface, (139, 69, 19), (screen_x - 5, screen_y - 25, 10, 20)) 
         pygame.draw.circle(surface, (210, 180, 140), (screen_x, screen_y - 32), 8)
-        pygame.draw.ellipse(surface, (100, 70, 40), (screen_x - 12, screen_y - 42, 24, 8)) # Brim
-        pygame.draw.rect(surface, (100, 70, 40), (screen_x - 7, screen_y - 46, 14, 8)) # Top
+        pygame.draw.ellipse(surface, (100, 70, 40), (screen_x - 12, screen_y - 42, 24, 8)) 
+        pygame.draw.rect(surface, (100, 70, 40), (screen_x - 7, screen_y - 46, 14, 8)) 
 
     def draw(self):
         self.grid.draw(self.screen)
@@ -273,7 +269,7 @@ class BridgeBuilderApp:
             self.screen.blit(text, rect)
         
         if self.mode == "BUILD":
-            help_str = "SPACE: Szimuláció | TAB: Tömör/Üreges | M: Menü | G: Grafikon"
+            help_str = "SPACE: Szimuláció | M: Menü | G: Grafikon"
             help_txt = self.font.render(help_str, True, (80, 90, 80))
             self.screen.blit(help_txt, (self.screen.get_width() - help_txt.get_width() - 20, 20))
         
@@ -309,7 +305,6 @@ class BridgeBuilderApp:
          view_mode = self.prop_menu.view_mode 
          text_mode = self.prop_menu.text_mode
          
-         # VISUALIZATION SETTINGS
          EXAGGERATION = 20.0 
          
          # 1. Draw Nodes
@@ -331,7 +326,6 @@ class BridgeBuilderApp:
             p2_x = beam.node_b.x + db_x * EXAGGERATION
             p2_y = beam.node_b.y + db_y * EXAGGERATION
             
-            # Curve Math
             chord_dx = p2_x - p1_x
             chord_dy = p2_y - p1_y
             L_deformed = math.hypot(chord_dx, chord_dy)
@@ -359,8 +353,14 @@ class BridgeBuilderApp:
                 points.append(self.grid.world_to_screen(wx, wy))
 
             color = (100, 100, 100)
-            props = MaterialManager.get_properties(beam.type, beam.hollow)
+            
+            # JAVÍTÁS: A tulajdonságokat a MaterialManager-ből olvassuk ki
+            props = MaterialManager.get_properties(beam.type)
             width = max(2, int(props['thickness'] * PPM))
+            
+            # Üregesség lekérdezése a MaterialManager-ből
+            mat_settings = MaterialManager.MATERIALS.get(beam.type, {})
+            hollow_ratio = mat_settings.get("hollow_ratio", 0.0)
             
             ratio = self.static_solver.stress_ratios.get(beam, 0.0)
             
@@ -384,19 +384,18 @@ class BridgeBuilderApp:
             if len(points) > 1:
                 pygame.draw.lines(self.screen, color, False, points, width)
             
-            if beam.hollow and len(points) > 1:
-                 pygame.draw.lines(self.screen, (255,255,255), False, points, max(1, width-4))
+            # Üregesség megjelenítése FEHÉR sávval
+            if hollow_ratio > 0.01 and len(points) > 1:
+                 # Legalább 1 pixel vastag legyen, ha van üreg
+                 inner_w = max(1, int(width * hollow_ratio))
+                 pygame.draw.lines(self.screen, (255,255,255), False, points, inner_w)
 
-            # Text Labels 
             if text_mode != 2: 
                 mid_idx = segments // 2
                 mx, my = points[mid_idx]
-                
                 label = ""
                 if text_mode == 0: 
-                    # --- FETCH BOTH NUMBERS ---
                     bend = abs(self.static_solver.bending_results.get(beam, 0))
-                    # Format: "Axial | Bending"
                     label = f"{int(abs(force))}N | {int(bend)}N"
                 elif text_mode == 1: 
                     label = f"{int(ratio * 100)}%"

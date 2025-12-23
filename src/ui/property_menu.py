@@ -50,22 +50,23 @@ class Slider:
             self.dragging = False
 
     def draw(self, surface, rect):
-        curr = self.parent_dict[self.dict_key]
+        curr = self.parent_dict.get(self.dict_key, 0.0)
         
-        # --- MÉRTÉKEGYSÉG SKÁLÁZÁS ÉS MEGJELENÍTÉS ---
         display_val = curr
         display_unit = self.unit
         
-        # Automatikus váltás olvasható mértékegységekre
-        if self.dict_key == "E": # Pa -> GPa
+        if self.dict_key == "E": 
             display_val = curr / 1e9
             display_unit = "GPa"
-        elif self.dict_key == "strength": # Pa -> MPa
+        elif self.dict_key == "strength": 
             display_val = curr / 1e6
             display_unit = "MPa"
+        elif self.dict_key == "hollow_ratio":
+            display_val = curr * 100.0
+            display_unit = "%"
             
         font = pygame.font.SysFont("arial", 12)
-        val_str = f"{display_val:.2f} {display_unit}"
+        val_str = f"{display_val:.1f} {display_unit}"
         
         label_txt = font.render(f"{self.label}", True, (200, 200, 200))
         val_txt = font.render(val_str, True, COLOR_TEXT_HIGHLIGHT)
@@ -73,10 +74,8 @@ class Slider:
         surface.blit(label_txt, (rect.x, rect.y - 18))
         surface.blit(val_txt, (rect.right - val_txt.get_width(), rect.y - 18))
 
-        # Slider Pálya
         pygame.draw.rect(surface, (30, 30, 30), rect, border_radius=4)
         
-        # Slider Kitöltés
         try:
             ratio = (curr - self.min_v) / (self.max_v - self.min_v)
             ratio = max(0.0, min(1.0, ratio))
@@ -84,16 +83,15 @@ class Slider:
             ratio = 0.0
 
         fill_w = int(rect.width * ratio)
-        fill_rect = (rect.x, rect.y, fill_w, rect.height) # Tuple a biztonság kedvéért
+        fill_rect = (rect.x, rect.y, fill_w, rect.height)
         pygame.draw.rect(surface, (100, 150, 100), fill_rect, border_radius=4)
         
-        # Fogantyú
         handle_x = rect.x + fill_w
         pygame.draw.circle(surface, COLOR_UI_BORDER, (handle_x, rect.centery), 6)
 
 class PropertyMenu:
     def __init__(self, screen_w, screen_h):
-        self.w = 300 # Kicsit szélesebb a hosszabb nevek miatt
+        self.w = 300 
         self.h = screen_h
         self.x = screen_w - self.w
         self.y = 0
@@ -102,14 +100,22 @@ class PropertyMenu:
         
         self.sliders = []
         self.buttons = []
+        self.temp_slider = None 
         
         self.view_mode = 1 
         self.text_mode = 0 
         
         self.setup_ui()
 
+    def set_analysis_mode(self, enabled):
+        if enabled:
+            self.temp_slider.dict_key = "sim_temp"
+            self.temp_slider.label = "Szim. Hőm."
+        else:
+            self.temp_slider.dict_key = "base_temp"
+            self.temp_slider.label = "Alap Hőm."
+
     def create_centered_slider(self, label, unit, mat_key, prop_key, range_percent=0.5):
-        """Segédfüggvény: Létrehoz egy slidert, ahol a jelenlegi érték van középen."""
         default_val = MaterialManager.MATERIALS[mat_key][prop_key]
         min_v = default_val * (1.0 - range_percent)
         max_v = default_val * (1.0 + range_percent)
@@ -117,32 +123,36 @@ class PropertyMenu:
 
     def setup_ui(self):
         # --- FA ---
-        # E: Rugalmassági modulusz (Merevség)
         self.create_centered_slider("Fa Rugalmasság (E)", "Pa", "wood", "E")
-        # Sűrűség: Térfogatsűrűség
         self.create_centered_slider("Fa Sűrűség", "kg/m³", "wood", "density")
-        # Szakítószilárdság (Feszültség határ)
         self.create_centered_slider("Fa Szakítószilárdság", "Pa", "wood", "strength")
-        # Vastagság (Átmérő) - Itt manuális tartomány jobb
         self.sliders.append(Slider("Fa Átmérő", "m", 0.05, 0.5, MaterialManager.MATERIALS["wood"], "thickness"))
+        self.sliders.append(Slider("Fa Üregesség", "%", 0.0, 0.99, MaterialManager.MATERIALS["wood"], "hollow_ratio"))
         
         # --- BAMBUSZ ---
         self.create_centered_slider("Bambusz Rugalmasság", "Pa", "bamboo", "E")
         self.create_centered_slider("Bambusz Sűrűség", "kg/m³", "bamboo", "density")
         self.create_centered_slider("Bambusz Szakítószil.", "Pa", "bamboo", "strength")
         self.sliders.append(Slider("Bambusz Átmérő", "m", 0.02, 0.3, MaterialManager.MATERIALS["bamboo"], "thickness"))
+        self.sliders.append(Slider("Bambusz Üregesség", "%", 0.0, 0.99, MaterialManager.MATERIALS["bamboo"], "hollow_ratio"))
 
         # --- INDA ---
         self.create_centered_slider("Inda Rugalmasság", "Pa", "vine", "E")
         self.create_centered_slider("Inda Sűrűség", "kg/m³", "vine", "density")
         self.create_centered_slider("Inda Szakítószil.", "Pa", "vine", "strength")
         self.sliders.append(Slider("Inda Átmérő", "m", 0.01, 0.15, MaterialManager.MATERIALS["vine"], "thickness"))
+        self.sliders.append(Slider("Inda Üregesség", "%", 0.0, 0.99, MaterialManager.MATERIALS["vine"], "hollow_ratio"))
 
-        # --- IXCHEL (Játékos) ---
-        self.sliders.append(Slider("Ixchel Tömege", "kg", 40.0, 150.0, MaterialManager.AGENT, "mass")) # 70kg közép
+        # --- GLOBALS ---
+        # Temperature Slider (Context sensitive)
+        self.temp_slider = Slider("Alap Hőm.", "°C", 0.0, 50.0, MaterialManager.SETTINGS, "base_temp")
+        self.sliders.append(self.temp_slider)
+
+        # Agent
+        self.sliders.append(Slider("Ixchel Tömege", "kg", 40.0, 150.0, MaterialManager.AGENT, "mass")) 
         self.sliders.append(Slider("Ixchel Sebessége", "m/s", 1.0, 10.0, MaterialManager.AGENT, "speed"))
 
-        # --- Gombok ---
+        # --- Buttons ---
         start_y = 60 + len(self.sliders) * 42 + 20
         btn_w = 240
         btn_h = 35
@@ -226,8 +236,3 @@ class PropertyMenu:
         t_str = f"Adat: {t_modes[self.text_mode]}"
         t_txt = info_font.render(t_str, True, (180, 200, 180))
         surface.blit(t_txt, (self.x + 30, self.buttons[1].rect.bottom + 25))
-            
-        mode = "ÜREGES (Cső)" if MaterialManager.PLACEMENT_MODE_HOLLOW else "TÖMÖR (Rúd)"
-        col = (100, 255, 100) if not MaterialManager.PLACEMENT_MODE_HOLLOW else (100, 200, 255)
-        txt = info_font.render(f"Építési Mód: {mode}", True, col)
-        surface.blit(txt, (self.x + 30, self.h - 110))

@@ -13,8 +13,7 @@ class Beam:
         self.type = material_type
         
         # Engineering Properties
-        self.hollow = False      # Solid by default
-        self.thickness = 0.1     # 10cm diameter
+        # self.hollow_ratio eltávolítva - mostantól a MaterialManager kezeli globálisan
         self.stress = 0.0        # Current load (0.0 - 1.0)
 
     @property

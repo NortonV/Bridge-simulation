@@ -5,14 +5,13 @@ from core.material_manager import MaterialManager
 class StaticSolver:
     def __init__(self, bridge):
         self.bridge = bridge
-        self.results = {}          # Pure Axial Force (N)
-        self.bending_results = {}  # Equivalent Bending Force (N)
-        self.stress_ratios = {}    # Utilization %
-        self.displacements = {}    # For visual bending
+        self.results = {}          
+        self.bending_results = {}  
+        self.stress_ratios = {}    
+        self.displacements = {}    
         self.error_msg = ""
 
     def is_stable(self):
-        # A simple check for anchors
         fixed_nodes = sum(1 for n in self.bridge.nodes if n.fixed)
         if fixed_nodes < 2:
             self.error_msg = "Unstable: Need at least 2 anchors."
@@ -28,7 +27,6 @@ class StaticSolver:
             self.error_msg = "Empty structure"
             return False
 
-        # 1. Map DOFs (3 per node: x, y, theta)
         dof_map = {}
         for i, node in enumerate(nodes):
             dof_map[node] = (3*i, 3*i+1, 3*i+2)
@@ -39,7 +37,8 @@ class StaticSolver:
         
         # 2. Assemble Matrix
         for beam in beams:
-            props = MaterialManager.get_properties(beam.type, beam.hollow)
+            # Use global material properties (including hollow_ratio)
+            props = MaterialManager.get_properties(beam.type)
             E = props["E"]
             A = props["area"]
             I = props["inertia"]
@@ -53,7 +52,6 @@ class StaticSolver:
             c = dx / L
             s = dy / L
             
-            # Local Frame Stiffness (6x6)
             k_local = np.array([
                 [ E*A/L,        0,             0,           -E*A/L,       0,             0           ],
                 [ 0,            12*E*I/L**3,   6*E*I/L**2,  0,            -12*E*I/L**3,  6*E*I/L**2  ],
@@ -63,13 +61,11 @@ class StaticSolver:
                 [ 0,            6*E*I/L**2,    2*E*I/L,     0,            -6*E*I/L**2,   4*E*I/L     ]
             ])
             
-            # Transformation Matrix
             T = np.zeros((6, 6))
             block = np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
             T[0:3, 0:3] = block
             T[3:6, 3:6] = block
             
-            # Global Stiffness
             k_global = T.T @ k_local @ T
             
             idxs = dof_map[n1] + dof_map[n2]
@@ -77,16 +73,14 @@ class StaticSolver:
                 for j in range(6):
                     K_global[idxs[i], idxs[j]] += k_global[i, j]
 
-            # --- Gravity Load (Distributed) ---
+            # Gravity
             g = 9.81
             mass = props["density"] * A * L
             weight = mass * g
-            
             w_total = weight / L
             w_axial = w_total * s      
             w_trans = -w_total * c     
             
-            # Fixed End Actions
             fea = np.array([
                 -w_axial*L/2, w_trans*L/2, w_trans*L**2/12,
                 -w_axial*L/2, w_trans*L/2, -w_trans*L**2/12
@@ -96,20 +90,20 @@ class StaticSolver:
             for i in range(6):
                 F_global[idxs[i]] += fea_global[i]
 
-            # --- Thermal Load ---
-            if abs(temperature) > 0.1:
+            # Thermal Load
+            if abs(temperature) > 0.01:
                 alpha = props["alpha"]
+                # Force = E * A * alpha * delta_T
                 thermal_force = E * A * alpha * temperature
                 fx = thermal_force * c
                 fy = thermal_force * s
                 
-                # Apply to axial DOFs
                 F_global[idxs[0]] -= fx
                 F_global[idxs[1]] -= fy
                 F_global[idxs[3]] += fx
                 F_global[idxs[4]] += fy
 
-            # --- Ixchel Point Load ---
+            # Point Load
             if point_load and point_load['beam'] == beam:
                 P_mag = point_load['mass'] * 9.81
                 t = point_load['t']
@@ -119,7 +113,6 @@ class StaticSolver:
                 a = t * L
                 b = (1 - t) * L
                 
-                # FEA for Point Load
                 M1 = P_trans * a * (b**2) / (L**2)
                 M2 = -P_trans * (a**2) * b / (L**2)
                 V1 = (P_trans * b / L) + (M1 + M2) / L
@@ -132,12 +125,11 @@ class StaticSolver:
                 for i in range(6):
                     F_global[idxs[i]] += pl_glob[i]
 
-        # 3. Boundary Conditions
         free_dofs = []
         for i, node in enumerate(nodes):
             idxs = dof_map[node]
             if node.fixed:
-                pass # Fixed nodes have 0 displacement
+                pass 
             else:
                 free_dofs.extend(idxs)
 
@@ -148,7 +140,6 @@ class StaticSolver:
         K_reduced = K_global[np.ix_(free_dofs, free_dofs)]
         F_reduced = F_global[free_dofs]
 
-        # 4. Solve Linear System
         try:
             d_free = np.linalg.solve(K_reduced, F_reduced)
         except np.linalg.LinAlgError:
@@ -158,20 +149,18 @@ class StaticSolver:
         D_global = np.zeros(total_dofs)
         D_global[free_dofs] = d_free
         
-        # Store displacements for visual bending
         self.displacements.clear()
         for i, node in enumerate(nodes):
              idx = 3 * i
              self.displacements[node] = (D_global[idx], D_global[idx+1], D_global[idx+2])
 
-        # 5. Post-Processing
         self.results.clear()
         self.bending_results.clear()
         self.stress_ratios.clear()
         
         for beam in beams:
             n1, n2 = beam.node_a, beam.node_b
-            props = MaterialManager.get_properties(beam.type, beam.hollow)
+            props = MaterialManager.get_properties(beam.type)
             
             idxs = dof_map[n1] + dof_map[n2]
             u_global = D_global[list(idxs)]
@@ -186,10 +175,8 @@ class StaticSolver:
             T[0:3, 0:3] = block
             T[3:6, 3:6] = block
             
-            # Local forces
             u_local = T @ u_global
             
-            # Reconstruct k_local
             E, A, I = props["E"], props["area"], props["inertia"]
             k_local = np.array([
                 [ E*A/L,        0,             0,           -E*A/L,       0,             0           ],
@@ -205,24 +192,21 @@ class StaticSolver:
             axial_force = f_local[3] 
             max_moment = max(abs(f_local[2]), abs(f_local[5]))
             
-            # Stress Analysis
             sigma_axial = abs(axial_force) / A
             sigma_bending = (max_moment * (props["thickness"] / 2.0)) / I
             
             total_stress = sigma_axial + sigma_bending
             stress_ratio = total_stress / props["strength"]
             
-            # Convert Bending Stress to Equivalent Force (Newtons)
             bending_force_equiv = sigma_bending * A
 
-            # Buckling Check
             if axial_force < 0:
                 P_cr = (math.pi**2 * E * I) / (L**2)
                 if abs(axial_force) > P_cr:
                     stress_ratio = 999.0 
             
             self.results[beam] = axial_force
-            self.bending_results[beam] = bending_force_equiv # <--- STORE THE SECOND NUMBER
+            self.bending_results[beam] = bending_force_equiv 
             self.stress_ratios[beam] = stress_ratio
             beam.stress = min(1.0, stress_ratio)
 
