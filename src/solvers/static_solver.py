@@ -42,17 +42,18 @@ class StaticSolver:
                 i = node_map[beam.node_a]
                 j = node_map[beam.node_b]
                 
-                props = MaterialManager.get_properties(beam.type)
-                
-                # Retrieve individual hollow ratio if available
-                mat_settings = MaterialManager.MATERIALS.get(beam.type, {})
-                # Note: In a full implementation, we would store hollow_ratio on the beam instance
-                # For now, we rely on the material manager default
+                # FIX: Pass the beam's hollow_ratio to the material manager
+                props = MaterialManager.get_properties(beam.type, hollow_ratio=beam.hollow_ratio)
                 
                 E = props["E"]
                 A = props["area"]
                 I = props["inertia"]
                 
+                # FIX: Vines and Cables act like ropes (Truss elements), not beams.
+                # They should have very little bending stiffness.
+                if beam.type in ["vine", "cable"]:
+                    I = I * 0.001 
+
                 # If tension-only member is in slack set, reduce stiffness to near zero
                 if beam.type in ["vine", "cable"] and beam in self.slack_vines:
                     E = E * 1e-6 
@@ -106,7 +107,8 @@ class StaticSolver:
             # 3. Loads (Gravity + Custom)
             g = 9.81
             for beam in beams:
-                props = MaterialManager.get_properties(beam.type)
+                # FIX: Ensure gravity calculation also uses the correct hollow ratio
+                props = MaterialManager.get_properties(beam.type, hollow_ratio=beam.hollow_ratio)
                 mass = props["area"] * beam.length * props["density"]
                 weight = mass * g
                 
@@ -173,7 +175,7 @@ class StaticSolver:
                 delta_l = ((ub[0]-ua[0])*dx + (ub[1]-ua[1])*dy) / L
                 
                 # Thermal effect
-                props = MaterialManager.get_properties(beam.type)
+                props = MaterialManager.get_properties(beam.type, hollow_ratio=beam.hollow_ratio)
                 therm_delta = props["alpha"] * temperature * L
                 
                 # Net elongation
@@ -205,10 +207,16 @@ class StaticSolver:
             L = math.sqrt(dx*dx + dy*dy)
             c = dx/L; s = dy/L
             
-            props = MaterialManager.get_properties(beam.type)
+            # FIX: Use hollow_ratio in post-processing too
+            props = MaterialManager.get_properties(beam.type, hollow_ratio=beam.hollow_ratio)
             E = props["E"]
             A = props["area"]
             I = props["inertia"]
+
+            # FIX: Maintain consistency with solver - reduce I for vines/cables here too
+            # otherwise the large displacements of the cable will calculate as huge moments.
+            if beam.type in ["vine", "cable"]:
+                I = I * 0.001 
             
             # Local displacements
             T = np.zeros((6, 6))
@@ -234,10 +242,6 @@ class StaticSolver:
                 axial_force = 0.0
 
             # Bending Moment (Simplified max moment)
-            # M = 6EI/L^2 * (uy_a - uy_b) ... roughly
-            # Not fully accurate for frame, but good for vis
-            # Detailed: M_a = 2EI/L (2theta_a + theta_b - 3(uy_b-uy_a)/L)
-            
             theta_a = u_local[2]
             theta_b = u_local[5]
             relative_disp = (u_local[4] - u_local[1]) / L
@@ -264,7 +268,7 @@ class StaticSolver:
                     stress_ratio = 999.0 # Instant fail
             
             self.results[beam] = axial_force
-            self.bending_results[beam] = max_moment # Store moment force equivalent for simpler vis
+            self.bending_results[beam] = max_moment 
             self.stress_ratios[beam] = stress_ratio
 
         return True
