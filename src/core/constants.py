@@ -1,5 +1,8 @@
 # Physics Scale
-PPM = 40.0  
+PPM = 40.0
+
+# Simulation Settings
+EXAGGERATION = 20.0
 
 # --- THEME PALETTE: "The Lost City" ---
 COLOR_BG = (235, 235, 230)        # Paper/Parchment color (Keep light for drawing background later)

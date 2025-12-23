@@ -1,4 +1,5 @@
 import pygame
+import math # Ensure math is imported
 from core.constants import *
 from core.material_manager import MaterialManager
 
@@ -51,7 +52,7 @@ class Ixchel:
             
         self.was_moving = is_moving
 
-    def update_static(self, dt, beams):
+    def update_static(self, dt, beams, displacements=None, exaggeration=1.0):
         if not self.active: return None
         
         self.handle_audio() 
@@ -66,18 +67,73 @@ class Ixchel:
 
         for beam in beams:
             if beam.type != "wood": continue 
-            x1, y1 = beam.node_a.x, beam.node_a.y
-            x2, y2 = beam.node_b.x, beam.node_b.y
-            min_x, max_x = min(x1, x2), max(x1, x2)
+            
+            # --- CALCULATE DEFORMED GEOMETRY ---
+            node_a = beam.node_a
+            node_b = beam.node_b
+            
+            # Get original coordinates
+            x1_orig, y1_orig = node_a.x, node_a.y
+            x2_orig, y2_orig = node_b.x, node_b.y
+            
+            # Apply displacements if they exist
+            da_x, da_y, da_theta = 0, 0, 0
+            db_x, db_y, db_theta = 0, 0, 0
+            
+            if displacements:
+                da_x, da_y, da_theta = displacements.get(node_a, (0,0,0))
+                db_x, db_y, db_theta = displacements.get(node_b, (0,0,0))
+
+            # Calculate Visual Endpoints (Exaggerated)
+            p1_x = x1_orig + da_x * exaggeration
+            p1_y = y1_orig + da_y * exaggeration
+            p2_x = x2_orig + db_x * exaggeration
+            p2_y = y2_orig + db_y * exaggeration
+
+            # Check X bounds based on DEFORMED positions
+            min_x, max_x = min(p1_x, p2_x), max(p1_x, p2_x)
             
             if min_x <= self.x <= max_x:
                 if max_x - min_x < 0.01: continue 
-                if x2 > x1:
-                    t = (self.x - x1) / (x2 - x1)
-                    beam_y = y1 + t * (y2 - y1)
+                
+                # Calculate 't' (0.0 to 1.0) along the chord
+                # Note: This linear t is an approximation for the curve, but sufficient for movement
+                if p2_x > p1_x:
+                    t = (self.x - p1_x) / (p2_x - p1_x)
                 else:
-                    t = (self.x - x2) / (x1 - x2)
-                    beam_y = y2 + t * (y1 - y2)
+                    t = (self.x - p2_x) / (p1_x - p2_x)
+                
+                # --- CUBIC HERMITE SPLINE INTERPOLATION (Matches Renderer) ---
+                if displacements:
+                    chord_dx = p2_x - p1_x
+                    chord_dy = p2_y - p1_y
+                    L_deformed = math.hypot(chord_dx, chord_dy)
+                    psi = math.atan2(chord_dy, chord_dx)
+                    
+                    orig_dx = x2_orig - x1_orig
+                    orig_dy = y2_orig - y1_orig
+                    alpha = math.atan2(orig_dy, orig_dx)
+                    
+                    # Rotations relative to the new chord
+                    rot1 = (alpha + da_theta * exaggeration) - psi
+                    rot2 = (alpha + db_theta * exaggeration) - psi
+                    
+                    # Shape functions
+                    s = t
+                    h1 = s**3 - 2*s**2 + s
+                    h2 = s**3 - s**2
+                    
+                    v = L_deformed * (h1 * rot1 + h2 * rot2) # Perpendicular deflection
+                    u = s * L_deformed                       # Axial distance along chord
+                    
+                    cp = math.cos(psi)
+                    sp = math.sin(psi)
+                    
+                    # Final calculated Y on the curve
+                    beam_y = p1_y + u*sp + v*cp
+                else:
+                    # Fallback to linear interpolation if no simulation data
+                    beam_y = p1_y + t * (p2_y - p1_y)
                 
                 if beam_y > best_beam_y:
                     best_beam_y = beam_y
@@ -87,7 +143,7 @@ class Ixchel:
         if found_beam:
             self.y = best_beam_y
             return {
-                'beam': found_beam, # <--- THIS LINE WAS MISSING
+                'beam': found_beam,
                 'node_a': found_beam.node_a if found_beam.node_a.x < found_beam.node_b.x else found_beam.node_b,
                 'node_b': found_beam.node_b if found_beam.node_a.x < found_beam.node_b.x else found_beam.node_a,
                 't': t_val,

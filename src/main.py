@@ -208,7 +208,11 @@ class BridgeBuilderApp:
                 return
 
             self.ghost_agent.mass = MaterialManager.AGENT["mass"]
-            load_info = self.ghost_agent.update_static(1.0/60.0, self.bridge.beams)
+            # Use the same exaggeration factor as the renderer (20.0)
+            disps = self.static_solver.displacements
+            
+            # Pass displacements and exaggeration to the agent
+            load_info = self.ghost_agent.update_static(1.0/60.0, self.bridge.beams, disps, EXAGGERATION)
             
             delta_T = MaterialManager.SETTINGS["sim_temp"] - MaterialManager.SETTINGS["base_temp"]
             self.static_solver.solve(temperature=delta_T, point_load=load_info)
@@ -330,8 +334,6 @@ class BridgeBuilderApp:
          
          view_mode = self.prop_menu.view_mode 
          text_mode = self.prop_menu.text_mode
-         
-         EXAGGERATION = 20.0 
          
          # 1. Draw Nodes
          for node in self.bridge.nodes:

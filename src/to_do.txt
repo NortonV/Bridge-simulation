@@ -1,6 +1,5 @@
 -Add a few default bridges that can be loaded (at least what we will build)
 -Fix sound effects (creaking is weird, some sounds feel delayed, steps should be better, etc)
--Ixchel can fly
 -Anti aliasync, hollow has too much hollow
 -Background by gergő
 -Send it over to the bois for beta testing
