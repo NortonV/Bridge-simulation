@@ -27,9 +27,8 @@ class Ixchel:
         
         keys = pygame.key.get_pressed()
         
-        # --- UPDATED: Fetch Speed Live ---
+        # Fetch Speed Live
         speed = MaterialManager.AGENT["speed"]
-        # ---------------------------------
         
         self.velocity_x = 0
         if keys[pygame.K_LEFT]:
@@ -57,9 +56,8 @@ class Ixchel:
         
         self.handle_audio() 
         
-        # --- UPDATED: Fetch Mass Live ---
+        # Fetch Mass Live
         self.mass = MaterialManager.AGENT["mass"]
-        # --------------------------------
 
         self.x += self.velocity_x * dt
         best_beam_y = -9999
@@ -89,6 +87,7 @@ class Ixchel:
         if found_beam:
             self.y = best_beam_y
             return {
+                'beam': found_beam, # <--- THIS LINE WAS MISSING
                 'node_a': found_beam.node_a if found_beam.node_a.x < found_beam.node_b.x else found_beam.node_b,
                 'node_b': found_beam.node_b if found_beam.node_a.x < found_beam.node_b.x else found_beam.node_a,
                 't': t_val,

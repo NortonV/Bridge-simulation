@@ -1,66 +1,78 @@
 import math
 
 class MaterialManager:
-    # --- GLOBAL BUILD SETTINGS ---
-    PLACEMENT_MODE_HOLLOW = False # Toggled by H/J
+    # --- JÁTÉKMENET BEÁLLÍTÁSOK ---
+    PLACEMENT_MODE_HOLLOW = False 
     
-    # --- BASE PROPERTIES (Tunable) ---
-    # E: Stiffness factor (for default thickness)
-    # Density: Linear Density (kg/m) (for default thickness)
-    # Strength: Breaking threshold
-    # Thickness: Diameter of the beam in meters
+    # --- FIZIKAI AXIÓMÁK (Alapértékek) ---
+    # Ezek a valós világban mért átlagos értékek.
+    # E (Young-modulus): Mennyire merev az anyag (Pa).
+    # Density: Sűrűség (kg/m³).
+    # Strength: Szakítószilárdság (Pa) - Mekkora belső feszültségnél törik.
+    # Alpha: Hőtágulási együttható (1/°C).
     MATERIALS = {
-        "wood":   {"E": 1000.0, "density": 1.0, "strength": 0.015, "max_length": None, "thickness": 0.1},
-        "bamboo": {"E": 2000.0, "density": 0.5, "strength": 0.100, "max_length": None, "thickness": 0.1},
-        "vine":   {"E": 100.0,  "density": 0.2, "strength": 0.300, "max_length": None, "thickness": 0.05}
+        "wood":   {
+            "E": 11e9,          # 11 GPa (Normál fa)
+            "density": 600.0,   # 600 kg/m³
+            "strength": 40e6,   # 40 MPa
+            "alpha": 5e-6,      
+            "thickness": 0.20,  # 20 cm átmérő
+        },
+        "bamboo": {
+            "E": 18e9,          # 18 GPa (Merevebb, mint a fa)
+            "density": 700.0,   # 700 kg/m³ (Az anyaga sűrű, de csőként könnyű)
+            "strength": 60e6,   # 60 MPa (Erősebb)
+            "alpha": 10e-6,     
+            "thickness": 0.15,  # 15 cm
+        },
+        "vine":   {
+            "E": 0.5e9,         # 0.5 GPa (Nagyon rugalmas/nyúlós)
+            "density": 400.0,   # 400 kg/m³
+            "strength": 20e6,   # 20 MPa (Gyengébb)
+            "alpha": 2e-6,      
+            "thickness": 0.05,  # 5 cm
+        }
     }
     
-    # Agent Properties
     AGENT = {
-        "mass": 5.0,
+        "mass": 70.0, # Ixchel tömege (kg)
         "speed": 5.0
     }
 
-    # --- GEOMETRY CONSTANTS ---
-    DEFAULT_THICKNESS = 0.1 # Reference for scaling
-    WALL_THICKNESS = 0.01 # 1cm wall for hollow beams
+    # --- GEOMETRIA ---
+    WALL_THICKNESS = 0.02 # 2cm falvastagság csövek esetén
 
     @staticmethod
-    def get_area_properties(thickness, is_hollow):
-        # Calculate Cross-Sectional Area
+    def get_geometry(thickness, is_hollow):
+        """Kiszámolja a Keresztmetszetet (A) és az Inerciát (I)."""
         R = thickness / 2.0
-        area = math.pi * (R**2)
         
         if is_hollow:
             r = max(0, R - MaterialManager.WALL_THICKNESS)
-            area_hollow = math.pi * (R**2 - r**2)
-            return area_hollow
-        
-        return area
+            area = math.pi * (R**2 - r**2)
+            # Üreges henger inerciája
+            inertia = (math.pi / 4.0) * (R**4 - r**4)
+        else:
+            area = math.pi * (R**2)
+            # Tömör henger inerciája
+            inertia = (math.pi / 4.0) * (R**4)
+            
+        return area, inertia
 
     @staticmethod
     def get_properties(mat_type, is_hollow):
-        """Returns physical properties adjusted for geometry."""
+        """Visszaadja a szimulációhoz szükséges fizikai paramétereket."""
         base = MaterialManager.MATERIALS.get(mat_type, MaterialManager.MATERIALS["wood"])
         
-        # Current Configuration
         thickness = base.get("thickness", 0.1)
-        
-        # 1. Calculate Areas
-        # Reference Area (Solid, Default Thickness) - used to normalize base values
-        ref_R = MaterialManager.DEFAULT_THICKNESS / 2.0
-        ref_area = math.pi * (ref_R**2)
-        
-        # Actual Area
-        actual_area = MaterialManager.get_area_properties(thickness, is_hollow)
-        
-        # 2. Scale Factor
-        # Properties (E, Density) scale with Area
-        scale = actual_area / ref_area
+        area, inertia = MaterialManager.get_geometry(thickness, is_hollow)
         
         return {
-            "E": base["E"] * scale,
-            "density": base["density"] * scale, # Linear Density scales with area
-            "strength": base["strength"],       # Strength (Material Limit) is constant
-            "thickness": thickness
+            "E": base["E"],
+            "density": base["density"], 
+            "strength": base["strength"],
+            "alpha": base["alpha"],
+            "thickness": thickness,
+            "area": area,
+            "inertia": inertia
         }

@@ -15,7 +15,6 @@ class Button:
             self.callback()
 
     def draw(self, surface):
-        # Stone button style
         color = (70, 80, 70) if self.hover else (50, 60, 50)
         pygame.draw.rect(surface, color, self.rect, border_radius=6)
         
@@ -31,7 +30,7 @@ class Button:
 class Slider:
     def __init__(self, label, unit, min_v, max_v, parent_dict, dict_key):
         self.label = label
-        self.unit = unit # e.g. "kg", "N"
+        self.unit = unit 
         self.min_v = min_v
         self.max_v = max_v
         self.parent_dict = parent_dict 
@@ -40,7 +39,6 @@ class Slider:
 
     def update(self, rect, mouse_pos, mouse_down):
         mx, my = mouse_pos
-        
         if mouse_down:
             if rect.collidepoint(mx, my) or self.dragging:
                 self.dragging = True
@@ -54,31 +52,48 @@ class Slider:
     def draw(self, surface, rect):
         curr = self.parent_dict[self.dict_key]
         
-        # Label above slider
+        # --- MÉRTÉKEGYSÉG SKÁLÁZÁS ÉS MEGJELENÍTÉS ---
+        display_val = curr
+        display_unit = self.unit
+        
+        # Automatikus váltás olvasható mértékegységekre
+        if self.dict_key == "E": # Pa -> GPa
+            display_val = curr / 1e9
+            display_unit = "GPa"
+        elif self.dict_key == "strength": # Pa -> MPa
+            display_val = curr / 1e6
+            display_unit = "MPa"
+            
         font = pygame.font.SysFont("arial", 12)
-        val_str = f"{curr:.2f} {self.unit}"
+        val_str = f"{display_val:.2f} {display_unit}"
+        
         label_txt = font.render(f"{self.label}", True, (200, 200, 200))
         val_txt = font.render(val_str, True, COLOR_TEXT_HIGHLIGHT)
         
         surface.blit(label_txt, (rect.x, rect.y - 18))
         surface.blit(val_txt, (rect.right - val_txt.get_width(), rect.y - 18))
 
-        # Slider Track
+        # Slider Pálya
         pygame.draw.rect(surface, (30, 30, 30), rect, border_radius=4)
         
-        # Slider Fill
-        ratio = (curr - self.min_v) / (self.max_v - self.min_v)
+        # Slider Kitöltés
+        try:
+            ratio = (curr - self.min_v) / (self.max_v - self.min_v)
+            ratio = max(0.0, min(1.0, ratio))
+        except ZeroDivisionError:
+            ratio = 0.0
+
         fill_w = int(rect.width * ratio)
-        fill_rect = pygame.Rect(rect.x, rect.y, fill_w, rect.height)
+        fill_rect = (rect.x, rect.y, fill_w, rect.height) # Tuple a biztonság kedvéért
         pygame.draw.rect(surface, (100, 150, 100), fill_rect, border_radius=4)
         
-        # Handle (Gold Knob)
+        # Fogantyú
         handle_x = rect.x + fill_w
         pygame.draw.circle(surface, COLOR_UI_BORDER, (handle_x, rect.centery), 6)
 
 class PropertyMenu:
     def __init__(self, screen_w, screen_h):
-        self.w = 280
+        self.w = 300 # Kicsit szélesebb a hosszabb nevek miatt
         self.h = screen_h
         self.x = screen_w - self.w
         self.y = 0
@@ -88,40 +103,48 @@ class PropertyMenu:
         self.sliders = []
         self.buttons = []
         
-        # View Modes
-        self.view_mode = 1 # 0=Stress, 1=Texture, 2=Gradient
-        self.text_mode = 0 # 0=Value, 1=Percent, 2=None
+        self.view_mode = 1 
+        self.text_mode = 0 
         
         self.setup_ui()
 
+    def create_centered_slider(self, label, unit, mat_key, prop_key, range_percent=0.5):
+        """Segédfüggvény: Létrehoz egy slidert, ahol a jelenlegi érték van középen."""
+        default_val = MaterialManager.MATERIALS[mat_key][prop_key]
+        min_v = default_val * (1.0 - range_percent)
+        max_v = default_val * (1.0 + range_percent)
+        self.sliders.append(Slider(label, unit, min_v, max_v, MaterialManager.MATERIALS[mat_key], prop_key))
+
     def setup_ui(self):
-        # Translations to Hungarian
-        # Wood -> Fa
-        self.sliders.append(Slider("Fa Merevség (E)", "GPa", 100, 5000, MaterialManager.MATERIALS["wood"], "E"))
-        self.sliders.append(Slider("Fa Sűrűség", "kg/m", 0.1, 5.0, MaterialManager.MATERIALS["wood"], "density"))
-        self.sliders.append(Slider("Fa Teherbírás", "N", 0.001, 0.2, MaterialManager.MATERIALS["wood"], "strength"))
-        self.sliders.append(Slider("Fa Vastagság", "m", 0.01, 0.5, MaterialManager.MATERIALS["wood"], "thickness"))
+        # --- FA ---
+        # E: Rugalmassági modulusz (Merevség)
+        self.create_centered_slider("Fa Rugalmasság (E)", "Pa", "wood", "E")
+        # Sűrűség: Térfogatsűrűség
+        self.create_centered_slider("Fa Sűrűség", "kg/m³", "wood", "density")
+        # Szakítószilárdság (Feszültség határ)
+        self.create_centered_slider("Fa Szakítószilárdság", "Pa", "wood", "strength")
+        # Vastagság (Átmérő) - Itt manuális tartomány jobb
+        self.sliders.append(Slider("Fa Átmérő", "m", 0.05, 0.5, MaterialManager.MATERIALS["wood"], "thickness"))
         
-        # Bamboo -> Bambusz
-        self.sliders.append(Slider("Bambusz Merevség", "GPa", 100, 5000, MaterialManager.MATERIALS["bamboo"], "E"))
-        self.sliders.append(Slider("Bambusz Sűrűség", "kg/m", 0.1, 5.0, MaterialManager.MATERIALS["bamboo"], "density"))
-        self.sliders.append(Slider("Bambusz Teherbírás", "N", 0.001, 0.5, MaterialManager.MATERIALS["bamboo"], "strength"))
-        self.sliders.append(Slider("Bambusz Vastagság", "m", 0.01, 0.5, MaterialManager.MATERIALS["bamboo"], "thickness"))
+        # --- BAMBUSZ ---
+        self.create_centered_slider("Bambusz Rugalmasság", "Pa", "bamboo", "E")
+        self.create_centered_slider("Bambusz Sűrűség", "kg/m³", "bamboo", "density")
+        self.create_centered_slider("Bambusz Szakítószil.", "Pa", "bamboo", "strength")
+        self.sliders.append(Slider("Bambusz Átmérő", "m", 0.02, 0.3, MaterialManager.MATERIALS["bamboo"], "thickness"))
 
-        # Vine -> Inda
-        self.sliders.append(Slider("Inda Merevség", "GPa", 10, 500, MaterialManager.MATERIALS["vine"], "E"))
-        self.sliders.append(Slider("Inda Sűrűség", "kg/m", 0.1, 5.0, MaterialManager.MATERIALS["vine"], "density"))
-        self.sliders.append(Slider("Inda Teherbírás", "N", 0.01, 1.0, MaterialManager.MATERIALS["vine"], "strength"))
-        self.sliders.append(Slider("Inda Vastagság", "m", 0.01, 0.3, MaterialManager.MATERIALS["vine"], "thickness"))
+        # --- INDA ---
+        self.create_centered_slider("Inda Rugalmasság", "Pa", "vine", "E")
+        self.create_centered_slider("Inda Sűrűség", "kg/m³", "vine", "density")
+        self.create_centered_slider("Inda Szakítószil.", "Pa", "vine", "strength")
+        self.sliders.append(Slider("Inda Átmérő", "m", 0.01, 0.15, MaterialManager.MATERIALS["vine"], "thickness"))
 
-        # Agent -> Ixchel
-        self.sliders.append(Slider("Ixchel Tömege", "kg", 1.0, 500.0, MaterialManager.AGENT, "mass"))
-        self.sliders.append(Slider("Ixchel Sebessége", "m/s", 1.0, 20.0, MaterialManager.AGENT, "speed"))
+        # --- IXCHEL (Játékos) ---
+        self.sliders.append(Slider("Ixchel Tömege", "kg", 40.0, 150.0, MaterialManager.AGENT, "mass")) # 70kg közép
+        self.sliders.append(Slider("Ixchel Sebessége", "m/s", 1.0, 10.0, MaterialManager.AGENT, "speed"))
 
-        # --- Buttons ---
-        # Adjusted spacing
+        # --- Gombok ---
         start_y = 60 + len(self.sliders) * 42 + 20
-        btn_w = 220
+        btn_w = 240
         btn_h = 35
         
         r1 = pygame.Rect(self.x + 30, start_y, btn_w, btn_h)
@@ -147,9 +170,7 @@ class PropertyMenu:
 
     def handle_input(self, event):
         if not self.visible: return False
-        
         mx, my = pygame.mouse.get_pos()
-        
         if mx > self.x:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for btn in self.buttons:
@@ -160,52 +181,42 @@ class PropertyMenu:
 
     def update(self):
         if not self.visible: return
-        
         mx, my = pygame.mouse.get_pos()
         mouse_down = pygame.mouse.get_pressed()[0]
         
         start_y = 60
         gap = 42
-        
         for i, slider in enumerate(self.sliders):
-            rect = pygame.Rect(self.x + 30, start_y + i*gap, 220, 12)
+            rect = pygame.Rect(self.x + 30, start_y + i*gap, 240, 12)
             slider.update(rect, (mx, my), mouse_down)
-            
         for btn in self.buttons:
             btn.update((mx, my), mouse_down, False)
 
     def draw(self, surface):
         if not self.visible: return
         
-        # Panel Background
         s = pygame.Surface((self.w, self.h))
         s.set_alpha(240)
         s.fill((35, 40, 35))
         surface.blit(s, (self.x, self.y))
         
-        # Decorative Left Border
         pygame.draw.line(surface, COLOR_UI_BORDER, (self.x, 0), (self.x, self.h), 3)
         
-        # Header
         font = pygame.font.SysFont("arial", 20, bold=True)
         h = font.render("Tulajdonságok", True, COLOR_TEXT_HIGHLIGHT)
         surface.blit(h, (self.x + 30, 20))
         
-        # Draw Sliders
         start_y = 60
         gap = 42
         for i, slider in enumerate(self.sliders):
-            rect = pygame.Rect(self.x + 30, start_y + i*gap, 220, 12)
+            rect = pygame.Rect(self.x + 30, start_y + i*gap, 240, 12)
             slider.draw(surface, rect)
             
-        # Draw Buttons
         for btn in self.buttons:
             btn.draw(surface)
             
-        # Status Info
         info_font = pygame.font.SysFont("arial", 12)
         
-        # Translated View Modes
         v_modes = ["Erők (Kék/Piros)", "Anyagminta (Normál)", "Terhelés (Gradiens)"]
         v_str = f"Nézet: {v_modes[self.view_mode]}"
         v_txt = info_font.render(v_str, True, (180, 200, 180))
@@ -218,6 +229,5 @@ class PropertyMenu:
             
         mode = "ÜREGES (Cső)" if MaterialManager.PLACEMENT_MODE_HOLLOW else "TÖMÖR (Rúd)"
         col = (100, 255, 100) if not MaterialManager.PLACEMENT_MODE_HOLLOW else (100, 200, 255)
-        
         txt = info_font.render(f"Építési Mód: {mode}", True, col)
         surface.blit(txt, (self.x + 30, self.h - 110))

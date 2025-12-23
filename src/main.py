@@ -1,5 +1,7 @@
 import pygame
 import sys
+import math
+import numpy as np  # Make sure you have numpy installed!
 from core.constants import *
 from core.grid import Grid
 from entities.bridge import Bridge
@@ -27,7 +29,7 @@ class BridgeBuilderApp:
         self.grid = Grid(w, h)
         self.bridge = Bridge()
         self.toolbar = Toolbar(w, h)
-        self.graph = GraphOverlay(20, h - 300, 300, 150) # Moved up slightly
+        self.graph = GraphOverlay(20, h - 300, 300, 150)
         self.prop_menu = PropertyMenu(w, h)
         
         self.mode = "BUILD"
@@ -145,13 +147,13 @@ class BridgeBuilderApp:
         self.ghost_agent.mass = MaterialManager.AGENT["mass"]
         solver = StaticSolver(self.bridge)
         if not solver.is_stable():
-            # Translate common error
             if "Mechanism" in solver.error_msg:
                 self.show_error("Instabil szerkezet! (Mechanizmus)")
             else:
                 self.show_error(solver.error_msg)
             return
-        success = solver.solve(point_load=None)
+        # Solve with initial 0 temperature
+        success = solver.solve(temperature=0.0, point_load=None)
         if not success:
             self.show_error("Instabil: Szinguláris Mátrix")
         else:
@@ -192,36 +194,41 @@ class BridgeBuilderApp:
         
         self.prop_menu.update()
 
-        max_val = 0.0
+        max_force_val = 0.0
         max_perc = 0.0
         
         if self.mode == "ANALYSIS" and self.static_solver:
+            # 1. Update Physics
             self.ghost_agent.mass = MaterialManager.AGENT["mass"]
             load_info = self.ghost_agent.update_static(1.0/60.0, self.bridge.beams)
-            self.static_solver.solve(point_load=load_info)
+            # Pass temperature (if you had a slider for it, pass it here)
+            self.static_solver.solve(temperature=0.0, point_load=load_info)
             
-            for beam, force in self.static_solver.results.items():
-                if abs(force) > max_val: max_val = abs(force)
-                props = MaterialManager.get_properties(beam.type, beam.hollow)
-                capacity = props["E"] * props["strength"]
-                ratio = abs(force) / capacity
+            # 2. Find Peaks for Graph
+            for beam in self.bridge.beams:
+                f_axial = abs(self.static_solver.results.get(beam, 0))
+                f_bend = abs(self.static_solver.bending_results.get(beam, 0))
+                
+                total_load_N = f_axial + f_bend
+                
+                if total_load_N > max_force_val: 
+                    max_force_val = total_load_N
+                
+                ratio = self.static_solver.stress_ratios.get(beam, 0)
                 pct = ratio * 100.0
+                
                 if pct > max_perc: max_perc = pct
                 if ratio >= 1.0: self.broken_beams.add(beam)
             
-            self.graph.update(max_val, max_perc, "ANALYSIS")
+            self.graph.update(max_force_val, max_perc, "ANALYSIS")
         else:
             self.graph.update(0, 0, "BUILD")
 
         if self.vol_timer > 0: self.vol_timer -= 1
 
     def draw_ixchel(self, surface, screen_x, screen_y):
-        """Draws the agent as an Explorer character."""
-        # Body
         pygame.draw.rect(surface, (139, 69, 19), (screen_x - 5, screen_y - 25, 10, 20)) 
-        # Head
         pygame.draw.circle(surface, (210, 180, 140), (screen_x, screen_y - 32), 8)
-        # Hat (Indiana Jones style)
         pygame.draw.ellipse(surface, (100, 70, 40), (screen_x - 12, screen_y - 42, 24, 8)) # Brim
         pygame.draw.rect(surface, (100, 70, 40), (screen_x - 7, screen_y - 46, 14, 8)) # Top
 
@@ -243,7 +250,6 @@ class BridgeBuilderApp:
         self.graph.draw(self.screen)
         self.prop_menu.draw(self.screen)
         
-        # Messages / Toasts
         msg_text = None
         msg_color = COLOR_TEXT_MAIN
         if self.error_message:
@@ -255,7 +261,6 @@ class BridgeBuilderApp:
             
         if msg_text:
             text = self.large_font.render(msg_text, True, msg_color)
-            # Text background pill
             bg = pygame.Surface((text.get_width()+40, text.get_height()+20))
             bg.set_alpha(200)
             bg.fill((20, 20, 20))
@@ -267,7 +272,6 @@ class BridgeBuilderApp:
             self.screen.blit(bg, bg_rect)
             self.screen.blit(text, rect)
         
-        # Controls Hint
         if self.mode == "BUILD":
             help_str = "SPACE: Szimuláció | TAB: Tömör/Üreges | M: Menü | G: Grafikon"
             help_txt = self.font.render(help_str, True, (80, 90, 80))
@@ -277,7 +281,6 @@ class BridgeBuilderApp:
         pygame.display.flip()
 
     def draw_analysis_legend(self):
-        """Draws the explanation for Red/Blue colors."""
         box_w, box_h = 220, 100
         x = 20
         y = self.screen.get_height() - 420 
@@ -292,12 +295,10 @@ class BridgeBuilderApp:
         title = font.render("Jelmagyarázat", True, COLOR_TEXT_HIGHLIGHT)
         self.screen.blit(title, (x + 10, y + 10))
         
-        # Compression
         pygame.draw.rect(self.screen, COLOR_COMPRESSION, (x + 10, y + 35, 20, 20))
         lbl_c = font.render("Nyomás (Compression)", True, (200, 200, 200))
         self.screen.blit(lbl_c, (x + 40, y + 35))
 
-        # Tension
         pygame.draw.rect(self.screen, COLOR_TENSION, (x + 10, y + 65, 20, 20))
         lbl_t = font.render("Húzás (Tension)", True, (200, 200, 200))
         self.screen.blit(lbl_t, (x + 40, y + 65))
@@ -308,71 +309,109 @@ class BridgeBuilderApp:
          view_mode = self.prop_menu.view_mode 
          text_mode = self.prop_menu.text_mode
          
-         # Draw Nodes first
+         # VISUALIZATION SETTINGS
+         EXAGGERATION = 20.0 
+         
+         # 1. Draw Nodes
          for node in self.bridge.nodes:
-            pos = self.grid.world_to_screen(node.x, node.y)
+            dx, dy, _ = self.static_solver.displacements.get(node, (0,0,0))
+            def_x = node.x + dx * EXAGGERATION
+            def_y = node.y + dy * EXAGGERATION
+            pos = self.grid.world_to_screen(def_x, def_y)
             color = (180, 50, 50) if node.fixed else (80, 80, 80)
             pygame.draw.circle(self.screen, color, pos, 5)
 
-         # Draw Beams
+         # 2. Draw Beams (Curved)
          for beam, force in self.static_solver.results.items():
-            start = self.grid.world_to_screen(beam.node_a.x, beam.node_a.y)
-            end = self.grid.world_to_screen(beam.node_b.x, beam.node_b.y)
+            da_x, da_y, da_theta = self.static_solver.displacements.get(beam.node_a, (0,0,0))
+            db_x, db_y, db_theta = self.static_solver.displacements.get(beam.node_b, (0,0,0))
             
+            p1_x = beam.node_a.x + da_x * EXAGGERATION
+            p1_y = beam.node_a.y + da_y * EXAGGERATION
+            p2_x = beam.node_b.x + db_x * EXAGGERATION
+            p2_y = beam.node_b.y + db_y * EXAGGERATION
+            
+            # Curve Math
+            chord_dx = p2_x - p1_x
+            chord_dy = p2_y - p1_y
+            L_deformed = math.hypot(chord_dx, chord_dy)
+            psi = math.atan2(chord_dy, chord_dx)
+            
+            orig_dx = beam.node_b.x - beam.node_a.x
+            orig_dy = beam.node_b.y - beam.node_a.y
+            alpha = math.atan2(orig_dy, orig_dx)
+            
+            rot1 = (alpha + da_theta * EXAGGERATION) - psi
+            rot2 = (alpha + db_theta * EXAGGERATION) - psi
+            
+            points = []
+            segments = 12 
+            for i in range(segments + 1):
+                s = i / segments 
+                h1 = s**3 - 2*s**2 + s
+                h2 = s**3 - s**2
+                v = L_deformed * (h1 * rot1 + h2 * rot2)
+                u = s * L_deformed 
+                cp = math.cos(psi)
+                sp = math.sin(psi)
+                wx = p1_x + u*cp - v*sp
+                wy = p1_y + u*sp + v*cp
+                points.append(self.grid.world_to_screen(wx, wy))
+
             color = (100, 100, 100)
-            
             props = MaterialManager.get_properties(beam.type, beam.hollow)
-            thickness = props['thickness']
-            width = max(2, int(thickness * PPM))
+            width = max(2, int(props['thickness'] * PPM))
             
-            capacity = props["E"] * props["strength"]
-            ratio = abs(force) / capacity
+            ratio = self.static_solver.stress_ratios.get(beam, 0.0)
             
-            # STRESS VIEW
             if view_mode == 0: 
-                # Negative force = Compression (Blue), Positive = Tension (Red)
                 if force < 0: color = COLOR_COMPRESSION 
                 else:         color = COLOR_TENSION
-            
-            # TEXTURE VIEW
             elif view_mode == 1: 
                 color = beam.color
-                
-            # GRADIENT VIEW
             elif view_mode == 2: 
                 if beam in self.broken_beams:
                     color = COLOR_BROKEN
                 else:
                     base_c = beam.color
-                    target_c = (255, 50, 50) # Red warning
+                    target_c = (255, 50, 50)
                     t = min(1.0, ratio) 
                     r = int(base_c[0] + (target_c[0] - base_c[0]) * t)
                     g = int(base_c[1] + (target_c[1] - base_c[1]) * t)
                     b = int(base_c[2] + (target_c[2] - base_c[2]) * t)
                     color = (r, g, b)
 
-            pygame.draw.line(self.screen, color, start, end, width)
+            if len(points) > 1:
+                pygame.draw.lines(self.screen, color, False, points, width)
             
-            if beam.hollow:
-                 inner_w = max(1, width - 4)
-                 pygame.draw.line(self.screen, (255,255,255), start, end, inner_w)
+            if beam.hollow and len(points) > 1:
+                 pygame.draw.lines(self.screen, (255,255,255), False, points, max(1, width-4))
 
-            # Text Overlay
+            # Text Labels 
             if text_mode != 2: 
-                mx = (start[0] + end[0]) // 2
-                my = (start[1] + end[1]) // 2
+                mid_idx = segments // 2
+                mx, my = points[mid_idx]
                 
                 label = ""
-                if text_mode == 0: label = f"{int(abs(force))}N"
-                elif text_mode == 1: label = f"{int(ratio * 100)}%"
+                if text_mode == 0: 
+                    # --- FETCH BOTH NUMBERS ---
+                    bend = abs(self.static_solver.bending_results.get(beam, 0))
+                    # Format: "Axial | Bending"
+                    label = f"{int(abs(force))}N | {int(bend)}N"
+                elif text_mode == 1: 
+                    label = f"{int(ratio * 100)}%"
                     
                 text = self.font.render(label, True, (255, 255, 255))
-                # Small text background
                 bg_rect = text.get_rect(center=(mx, my))
                 bg_rect.inflate_ip(8, 4)
                 pygame.draw.rect(self.screen, (20, 20, 20), bg_rect, border_radius=4)
                 pygame.draw.rect(self.screen, color, bg_rect, 1, border_radius=4)
                 self.screen.blit(text, text.get_rect(center=(mx, my)))
+
+    def draw_hud(self):
+        info = f"Csomópontok: {len(self.bridge.nodes)} | Elemek: {len(self.bridge.beams)}"
+        text = self.font.render(info, True, COLOR_AXIS)
+        self.screen.blit(text, (20, 20))
 
     def draw_volume_popup(self):
             if self.vol_timer <= 0: return
@@ -403,12 +442,6 @@ class BridgeBuilderApp:
             txt.set_alpha(alpha)
             s.blit(txt, (box_w//2 - txt.get_width()//2, 10))
             self.screen.blit(s, (x, y))
-
-    def draw_hud(self):
-        # Top-left info
-        info = f"Csomópontok: {len(self.bridge.nodes)} | Elemek: {len(self.bridge.beams)}"
-        text = self.font.render(info, True, COLOR_AXIS)
-        self.screen.blit(text, (20, 20))
 
     def quit(self):
         pygame.quit()
