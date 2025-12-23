@@ -87,7 +87,6 @@ class Editor:
             
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 3: # Right Click
-                # --- FIX: CANCEL BUILD ---
                 if self.start_node:
                     self.start_node = None
                     if self.arch_stage == 1:
@@ -156,7 +155,6 @@ class Editor:
                 else:
                     target_beam = self.bridge.get_beam_at(self.drag_node.x, self.drag_node.y)
                     if target_beam:
-                         # --- FIX: CALL NEW METHOD ---
                          self.bridge.connect_node_to_beam(self.drag_node, target_beam)
                          self.audio.play_sfx("wood_place")
                 
@@ -166,8 +164,13 @@ class Editor:
                 if tool_type != "DELETE":
                     end_node = self.hover_node
                     if not end_node:
-                        is_anchor = (wy <= 0)
-                        end_node = self.bridge.add_node(wx, wy, is_anchor)
+                        # FIX: Check if we released ON a beam
+                        if self.hover_beam:
+                            end_node = self.bridge.split_beam(self.hover_beam, wx, wy)
+                            self.play_place_sound(self.hover_beam.type)
+                        else:
+                            is_anchor = (wy <= 0)
+                            end_node = self.bridge.add_node(wx, wy, is_anchor)
                     
                     if self.start_node != end_node:
                         if self.arch_mode:
@@ -178,8 +181,10 @@ class Editor:
                             created = self.bridge.add_beam(self.start_node, end_node, tool_type)
                             if created:
                                 self.play_place_sound(tool_type)
-                            self.start_node = None
-                else:
+                            # FIX: Don't set self.start_node = None here, move it out
+                
+                # FIX: Reset start_node here to ensure dragging stops even if clicking in place
+                if not (self.arch_mode and self.arch_stage == 1):
                      self.start_node = None
 
     def build_arch_curve(self, cx, cy, mat_type):
@@ -195,17 +200,14 @@ class Editor:
             bx = (1-t)**2 * p0[0] + 2*(1-t)*t * p1[0] + t**2 * p2[0]
             by = (1-t)**2 * p0[1] + 2*(1-t)*t * p1[1] + t**2 * p2[1]
             
-            # --- CRITICAL FIX: SNAP TO GRID (0.5m) ---
             bx = round(bx * 2) / 2
             by = round(by * 2) / 2
             
             if i == segments:
                 current_node = self.arch_end_node
             else:
-                # 'fixed' if it hits the ground (y <= 0)
                 current_node = self.bridge.add_node(bx, by, fixed=(by<=0))
             
-            # This handles duplicates automatically (if start == end, add_beam returns [])
             self.bridge.add_beam(prev_node, current_node, mat_type)
             prev_node = current_node
 
@@ -237,7 +239,7 @@ class Editor:
                 ty = start[1] + (end[1] - start[1]) * t
                 pygame.draw.circle(surface, (100, 100, 100), (int(tx), int(ty)), 2)
 
-        elif beam_type == BeamType.SPAGETTI:
+        elif beam_type == BeamType.SPAGHETTI:
              dx = end[0] - start[0]
              dy = end[1] - start[1]
              L = math.hypot(dx, dy)
@@ -264,8 +266,10 @@ class Editor:
             if self.toolbar.selected_tool["type"] == "DELETE" and beam == self.hover_beam:
                 color = (200, 50, 50)
                 width = 8
-            mat_props = MaterialManager.MATERIALS.get(beam.type, {})
-            current_hollow_ratio = mat_props.get("hollow_ratio", 0.0)
+            
+            # Use instance property instead of global lookup
+            current_hollow_ratio = beam.hollow_ratio
+            
             self.draw_textured_beam(surface, start, end, beam.type, width, color, current_hollow_ratio)
 
         for node in self.bridge.nodes:

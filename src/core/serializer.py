@@ -72,7 +72,8 @@ class Serializer:
             data["beams"].append({
                 "u": idx_a,
                 "v": idx_b,
-                "type": b.type
+                "type": b.type,
+                "hollow_ratio": b.hollow_ratio 
             })
 
         try:
@@ -94,7 +95,6 @@ class Serializer:
 
             # Load Settings if available
             if "materials" in data:
-                # FIX: Update sub-dictionaries in-place to preserve references used by UI Sliders
                 for mat_key, mat_props in data["materials"].items():
                     if mat_key in MaterialManager.MATERIALS:
                         MaterialManager.MATERIALS[mat_key].update(mat_props)
@@ -120,7 +120,10 @@ class Serializer:
                 if idx_a < len(created_nodes) and idx_b < len(created_nodes):
                     node_a = created_nodes[idx_a]
                     node_b = created_nodes[idx_b]
-                    bridge.add_beam_direct(node_a, node_b, mat_type)
+                    beam = bridge.add_beam_direct(node_a, node_b, mat_type)
+                    # Load hollow ratio if exists
+                    if "hollow_ratio" in b_data:
+                        beam.hollow_ratio = b_data["hollow_ratio"]
 
             name = os.path.basename(filename)
             return True, f"Loaded: {name}"

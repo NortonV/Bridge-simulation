@@ -15,6 +15,8 @@ class Beam:
         self.node_b = node_b
         self.type = material_type
         self.stress = 0.0
+        # Added hollow_ratio property
+        self.hollow_ratio = 0.0
 
     @property
     def color(self):

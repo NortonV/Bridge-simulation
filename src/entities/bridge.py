@@ -1,5 +1,6 @@
 import math
-from .beam import Beam 
+from .beam import Beam
+from core.material_manager import MaterialManager
 
 class Node:
     def __init__(self, x, y, fixed=False):
@@ -36,11 +37,14 @@ class Bridge:
         self.nodes.append(node_m1)
         self.nodes.append(node_m2)
 
+        # Updated to preserve hollow_ratio
+        ratio = beam.hollow_ratio
+
         b1 = self.add_beam_direct(beam.node_a, node_m1, beam.type)
-        if b1: b1.hollow = beam.hollow
+        if b1: b1.hollow_ratio = ratio
         
         b2 = self.add_beam_direct(beam.node_b, node_m2, beam.type)
-        if b2: b2.hollow = beam.hollow
+        if b2: b2.hollow_ratio = ratio
 
         if beam in self.beams:
             self.beams.remove(beam)
@@ -65,13 +69,14 @@ class Bridge:
             self.beams.remove(beam)
         
         mat_type = beam.type
-        is_hollow = beam.hollow
+        # Updated to preserve hollow_ratio
+        ratio = beam.hollow_ratio
         
         b1 = self.add_beam_direct(beam.node_a, new_node, mat_type)
-        if b1: b1.hollow = is_hollow
+        if b1: b1.hollow_ratio = ratio
         
         b2 = self.add_beam_direct(new_node, beam.node_b, mat_type)
-        if b2: b2.hollow = is_hollow
+        if b2: b2.hollow_ratio = ratio
         
         return new_node
 
@@ -96,17 +101,17 @@ class Bridge:
 
         # Save properties before removing
         mat_type = beam.type
-        is_hollow = beam.hollow
+        ratio = beam.hollow_ratio
         
         if beam in self.beams:
             self.beams.remove(beam)
         
         # Create two new beams connecting to this node
         b1 = self.add_beam_direct(beam.node_a, node, mat_type)
-        if b1: b1.hollow = is_hollow
+        if b1: b1.hollow_ratio = ratio
         
         b2 = self.add_beam_direct(node, beam.node_b, mat_type)
-        if b2: b2.hollow = is_hollow
+        if b2: b2.hollow_ratio = ratio
 
     def _get_intersection(self, p1, p2, p3, p4):
         x1, y1 = p1.x, p1.y
@@ -155,7 +160,6 @@ class Bridge:
         dy = node_b.y - node_a.y
         length = math.sqrt(dx**2 + dy**2)
         
-        from core.material_manager import MaterialManager 
         mat_props = MaterialManager.MATERIALS.get(material_type)
         limit = mat_props.get("max_length")
         if limit is not None and length > limit:
@@ -187,14 +191,15 @@ class Bridge:
         if hit_beam_obj and hit_beam_pt:
             split_node = self.add_node(hit_beam_pt[0], hit_beam_pt[1], fixed=False)
             old_type = hit_beam_obj.type
-            old_hollow = hit_beam_obj.hollow
+            # Update to use hollow_ratio
+            old_ratio = hit_beam_obj.hollow_ratio
             if hit_beam_obj in self.beams:
                 self.beams.remove(hit_beam_obj)
             
             b1 = self.add_beam_direct(hit_beam_obj.node_a, split_node, old_type)
-            if b1: b1.hollow = old_hollow
+            if b1: b1.hollow_ratio = old_ratio
             b2 = self.add_beam_direct(split_node, hit_beam_obj.node_b, old_type)
-            if b2: b2.hollow = old_hollow
+            if b2: b2.hollow_ratio = old_ratio
 
             beams_1 = self.add_beam(node_a, split_node, material_type)
             beams_2 = self.add_beam(split_node, node_b, material_type)
@@ -209,9 +214,16 @@ class Bridge:
             if (b.node_a == node_a and b.node_b == node_b) or \
                (b.node_a == node_b and b.node_b == node_a):
                 b.type = material_type
+                # Update settings even for existing beam
+                props = MaterialManager.MATERIALS.get(material_type, {})
+                b.hollow_ratio = props.get("hollow_ratio", 0.0)
                 return b 
         
         new_beam = Beam(node_a, node_b, material_type)
+        # Initialize from global settings
+        props = MaterialManager.MATERIALS.get(material_type, {})
+        new_beam.hollow_ratio = props.get("hollow_ratio", 0.0)
+        
         self.beams.append(new_beam)
         return new_beam
 
