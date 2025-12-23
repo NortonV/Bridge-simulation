@@ -29,10 +29,7 @@ class Editor:
         return self.arch_mode
 
     def play_place_sound(self, mat_type):
-        if mat_type == BeamType.VINE:
-            self.audio.play_sfx("vine_place")
-        else:
-            self.audio.play_sfx("wood_place")
+        self.audio.play_sfx("wood_place")
 
     def handle_continuous_input(self, world_pos):
         wx, wy = world_pos
@@ -223,21 +220,9 @@ class Editor:
                 
         elif beam_type == BeamType.WOOD:
             pygame.draw.line(surface, (80, 40, 10), start, end, 1)
-
-        elif beam_type == BeamType.VINE:
-            for t in [0.3, 0.6, 0.9]:
-                tx = start[0] + (end[0] - start[0]) * t
-                ty = start[1] + (end[1] - start[1]) * t
-                pygame.draw.circle(surface, (50, 200, 50), (int(tx), int(ty)), 2)
         
         elif beam_type == BeamType.STEEL:
             pygame.draw.line(surface, (150, 160, 170), start, end, 2)
-
-        elif beam_type == BeamType.CABLE:
-            for t in [0.1, 0.3, 0.5, 0.7, 0.9]:
-                tx = start[0] + (end[0] - start[0]) * t
-                ty = start[1] + (end[1] - start[1]) * t
-                pygame.draw.circle(surface, (100, 100, 100), (int(tx), int(ty)), 2)
 
         elif beam_type == BeamType.SPAGHETTI:
              dx = end[0] - start[0]

@@ -48,10 +48,8 @@ class BridgeBuilderApp:
         self.audio.load_music("theme.mp3")
         self.audio.play_music()
         self.audio.load_sfx("wood_place", "wood_place.mp3")
-        self.audio.load_sfx("vine_place", "vine_place.mp3")
         self.audio.load_sfx("step", "step.mp3") 
         self.audio.load_sfx("wood_break", "wood_break.mp3")
-        self.audio.load_sfx("vine_break", "vine_break.mp3")
 
         self.vol_timer = 0
         self.vol_display_val = 0.5
@@ -245,10 +243,7 @@ class BridgeBuilderApp:
             if new_break:
                 self.simulation_frozen = True
                 self.show_error("HÍDSZAKADÁS! (Szimuláció Megállítva)")
-                if any(b.type == "vine" for b in self.broken_beams):
-                     self.audio.play_sfx("vine_break")
-                else:
-                     self.audio.play_sfx("wood_break")
+                self.audio.play_sfx("wood_break")
                 self.audio.stop_sfx("step")
             
             self.graph.update(max_force_val, max_perc, "ANALYSIS")

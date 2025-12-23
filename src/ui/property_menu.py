@@ -144,23 +144,11 @@ class PropertyMenu:
         self.sliders.append(Slider("Bambusz Átmérő", "m", 0.02, 0.3, MaterialManager.MATERIALS["bamboo"], "thickness"))
         self.sliders.append(Slider("Bambusz Üregesség", "%", 0.0, 0.99, MaterialManager.MATERIALS["bamboo"], "hollow_ratio"))
 
-        # --- VINE ---
-        self.create_centered_slider("Inda Rugalmasság", "Pa", "vine", "E")
-        self.create_centered_slider("Inda Sűrűség", "kg/m³", "vine", "density")
-        self.create_centered_slider("Inda Szakítószil.", "Pa", "vine", "strength")
-        self.sliders.append(Slider("Inda Átmérő", "m", 0.01, 0.15, MaterialManager.MATERIALS["vine"], "thickness"))
-        self.sliders.append(Slider("Inda Üregesség", "%", 0.0, 0.99, MaterialManager.MATERIALS["vine"], "hollow_ratio"))
-
         # --- STEEL ---
         self.create_centered_slider("Acél Rugalmasság", "Pa", "steel", "E")
         self.create_centered_slider("Acél Sűrűség", "kg/m³", "steel", "density")
         self.create_centered_slider("Acél Szakítószil.", "Pa", "steel", "strength")
         self.sliders.append(Slider("Acél Átmérő", "m", 0.01, 0.2, MaterialManager.MATERIALS["steel"], "thickness"))
-
-        # --- CABLE ---
-        self.create_centered_slider("Sodrony Rugalmasság", "Pa", "cable", "E")
-        self.create_centered_slider("Sodrony Szakítószil.", "Pa", "cable", "strength")
-        self.sliders.append(Slider("Sodrony Átmérő", "m", 0.005, 0.1, MaterialManager.MATERIALS["cable"], "thickness"))
 
         # --- SPAGHETTI ---
         self.create_centered_slider("Spagetti Rugalmasság", "Pa", "spaghetti", "E")

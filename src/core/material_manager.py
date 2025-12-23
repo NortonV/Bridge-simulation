@@ -25,28 +25,12 @@ class MaterialManager:
             "thickness": 0.15, 
             "hollow_ratio": 0.0
         },
-        "vine":   {
-            "E": 0.5e9,         
-            "density": 400.0,   
-            "strength": 20e6,   
-            "alpha": 2e-6,      
-            "thickness": 0.05,
-            "hollow_ratio": 0.0
-        },
         "steel": {
             "E": 200e9,         # 200 GPa
             "density": 7850.0,  
             "strength": 250e6,  # 250 MPa
             "alpha": 12e-6,
             "thickness": 0.05,  # 5cm thick beams
-            "hollow_ratio": 0.0
-        },
-        "cable": {
-            "E": 160e9,         # 160 GPa
-            "density": 7850.0,
-            "strength": 1000e6, # 1000 MPa
-            "alpha": 12e-6,
-            "thickness": 0.02,  # 2cm thick
             "hollow_ratio": 0.0
         },
         "spaghetti": {

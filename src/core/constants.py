@@ -10,11 +10,9 @@ COLOR_UI_BORDER = (80, 90, 100)
 
 COLOR_WOOD = (160, 100, 50)       # Brown
 COLOR_BAMBOO = (100, 160, 60)     # Light Green
-COLOR_VINE = (34, 139, 34)        # Forest Green
 
 # --- NEW MATERIALS ---
 COLOR_STEEL = (112, 128, 144)     # Slate Gray
-COLOR_CABLE = (47, 79, 79)        # Dark Slate Gray
 COLOR_SPAGHETTI = (255, 255, 100) # Pale Yellow
 
 COLOR_CURSOR = (255, 165, 0)      # Bright Orange

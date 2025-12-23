@@ -4,9 +4,7 @@ from core.constants import *
 class BeamType:
     WOOD = "wood"
     BAMBOO = "bamboo"
-    VINE = "vine"
     STEEL = "steel"
-    CABLE = "cable"
     SPAGHETTI = "spaghetti"
 
 class Beam:
@@ -20,10 +18,8 @@ class Beam:
 
     @property
     def color(self):
-        if self.type == BeamType.VINE: return COLOR_VINE
         if self.type == BeamType.BAMBOO: return COLOR_BAMBOO
         if self.type == BeamType.STEEL: return COLOR_STEEL
-        if self.type == BeamType.CABLE: return COLOR_CABLE
         if self.type == BeamType.SPAGHETTI: return COLOR_SPAGHETTI
         return COLOR_WOOD
 

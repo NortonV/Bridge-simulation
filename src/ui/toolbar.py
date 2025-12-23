@@ -10,10 +10,8 @@ class Toolbar:
         self.tools = [
             {"name": "Fa gerenda", "key": "1", "type": BeamType.WOOD, "color": COLOR_WOOD},
             {"name": "Bambusz", "key": "2", "type": BeamType.BAMBOO, "color": COLOR_BAMBOO},
-            {"name": "Inda kötél", "key": "3", "type": BeamType.VINE, "color": COLOR_VINE},
-            {"name": "Acél", "key": "4", "type": BeamType.STEEL, "color": COLOR_STEEL},
-            {"name": "Acélsodrony", "key": "5", "type": BeamType.CABLE, "color": COLOR_CABLE},
-            {"name": "Spagetti", "key": "6", "type": BeamType.SPAGHETTI, "color": COLOR_SPAGHETTI},
+            {"name": "Acél", "key": "3", "type": BeamType.STEEL, "color": COLOR_STEEL},
+            {"name": "Spagetti", "key": "4", "type": BeamType.SPAGHETTI, "color": COLOR_SPAGHETTI},
             {"name": "Törlés", "key": "X", "type": "DELETE", "color": (200, 60, 60)}
         ]
         self.active_index = 0 
@@ -28,9 +26,7 @@ class Toolbar:
             if event.key == pygame.K_2: self.active_index = 1
             if event.key == pygame.K_3: self.active_index = 2
             if event.key == pygame.K_4: self.active_index = 3
-            if event.key == pygame.K_5: self.active_index = 4
-            if event.key == pygame.K_6: self.active_index = 5
-            if event.key == pygame.K_x: self.active_index = 6
+            if event.key == pygame.K_x: self.active_index = 4
         
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = pygame.mouse.get_pos()
