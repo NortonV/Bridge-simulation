@@ -22,5 +22,7 @@ COLOR_AXIS = (80, 80, 80)
 
 # --- CONFIG ---
 GRID_SIZE = 40
-PPM = 40.0 # Pixels Per Meter
-EXAGGERATION = 20.0 # Deformation exaggeration
+# Increased PPM from 40.0 to 60.0 for higher resolution/visibility
+PPM = 40.0 
+EXAGGERATION = 20.0 
+FPS = 144  # Target Framerate

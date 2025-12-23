@@ -74,11 +74,11 @@ class GraphOverlay:
             points_force.append((px, py_f))
             points_load.append((px, py_p))
 
-        # Draw Lines (Antialiased)
+        # Use Anti-aliased lines for smoother graphs
         if len(points_force) > 1:
-            pygame.draw.lines(surface, COLOR_TENSION, False, points_force, 2)
+            pygame.draw.aalines(surface, COLOR_TENSION, False, points_force)
         if len(points_load) > 1:
-            pygame.draw.lines(surface, (100, 255, 100), False, points_load, 2)
+            pygame.draw.aalines(surface, (100, 255, 100), False, points_load)
 
         # Labels & Values
         font = pygame.font.SysFont("arial", 12, bold=True)

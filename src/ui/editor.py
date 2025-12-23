@@ -16,9 +16,8 @@ class Editor:
         self.hover_beam = None
         self.drag_node = None
         
-        # --- ARCH TOOL STATE ---
         self.arch_mode = False
-        self.arch_stage = 0 # 0: Start-End selection, 1: Height adjustment
+        self.arch_stage = 0 
         self.arch_end_node = None
 
     def toggle_arch_mode(self):
@@ -83,7 +82,7 @@ class Editor:
             if self.drag_node.y <= 0: self.drag_node.fixed = True
             
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 3: # Right Click
+            if event.button == 3: 
                 if self.start_node:
                     self.start_node = None
                     if self.arch_stage == 1:
@@ -92,14 +91,13 @@ class Editor:
                     return
                 
                 if self.arch_stage == 1:
-                    # Cancel Arch
                     self.arch_stage = 0
                     self.start_node = None
                     self.arch_end_node = None
                 elif self.hover_node:
                     self.drag_node = self.hover_node
             
-            if event.button == 1: # Left Click
+            if event.button == 1: 
                 if self.arch_stage == 1:
                     self.build_arch_curve(wx, wy, tool_type)
                     self.arch_stage = 0
@@ -161,7 +159,6 @@ class Editor:
                 if tool_type != "DELETE":
                     end_node = self.hover_node
                     if not end_node:
-                        # FIX: Check if we released ON a beam
                         if self.hover_beam:
                             end_node = self.bridge.split_beam(self.hover_beam, wx, wy)
                             self.play_place_sound(self.hover_beam.type)
@@ -178,9 +175,7 @@ class Editor:
                             created = self.bridge.add_beam(self.start_node, end_node, tool_type)
                             if created:
                                 self.play_place_sound(tool_type)
-                            # FIX: Don't set self.start_node = None here, move it out
                 
-                # FIX: Reset start_node here to ensure dragging stops even if clicking in place
                 if not (self.arch_mode and self.arch_stage == 1):
                      self.start_node = None
 
@@ -209,6 +204,13 @@ class Editor:
             prev_node = current_node
 
     def draw_textured_beam(self, surface, start, end, beam_type, width, color, hollow_ratio):
+        # Improved drawing logic
+        # 1. Draw subtle shadow for contrast
+        shadow_off = 2
+        pygame.draw.line(surface, (10, 15, 10), (start[0]+shadow_off, start[1]+shadow_off), 
+                        (end[0]+shadow_off, end[1]+shadow_off), width)
+        
+        # 2. Draw Main Beam
         pygame.draw.line(surface, color, start, end, width)
         
         if beam_type == BeamType.BAMBOO:
@@ -238,29 +240,36 @@ class Editor:
                      e_off = (end[0] + ox, end[1] + oy)
                      pygame.draw.line(surface, (255, 255, 150), s_off, e_off, 1)
 
+        # Fix Hollow visibility
         if hollow_ratio > 0.0:
-            inner_w = max(1, int(width * hollow_ratio))
-            pygame.draw.line(surface, (255, 255, 255), start, end, inner_w)
+            # Calculate border size: at least 1.5 pixels or 15% of width
+            border_px = max(2, int(width * 0.15)) 
+            inner_w = max(0, width - (border_px * 2))
+            
+            if inner_w > 0:
+                pygame.draw.line(surface, (255, 255, 255), start, end, inner_w)
 
     def draw(self, surface):
         for beam in self.bridge.beams:
             start = self.grid.world_to_screen(beam.node_a.x, beam.node_a.y)
             end = self.grid.world_to_screen(beam.node_b.x, beam.node_b.y)
             color = beam.color
-            width = 6
+            
+            # Increased base width for better visibility
+            props = MaterialManager.get_properties(beam.type)
+            width = max(4, int(props['thickness'] * PPM)) 
+            
             if self.toolbar.selected_tool["type"] == "DELETE" and beam == self.hover_beam:
                 color = (200, 50, 50)
-                width = 8
+                width += 4
             
-            # Use instance property instead of global lookup
             current_hollow_ratio = beam.hollow_ratio
-            
             self.draw_textured_beam(surface, start, end, beam.type, width, color, current_hollow_ratio)
 
         for node in self.bridge.nodes:
             pos = self.grid.world_to_screen(node.x, node.y)
             if node.fixed:
-                rect = pygame.Rect(pos[0]-6, pos[1]-6, 12, 12)
+                rect = pygame.Rect(pos[0]-7, pos[1]-7, 14, 14)
                 pygame.draw.rect(surface, (180, 50, 50), rect) 
                 pygame.draw.rect(surface, (50, 20, 20), rect, 2)
             else:
@@ -269,8 +278,8 @@ class Editor:
                     if self.toolbar.selected_tool["type"] == "DELETE": 
                         if not node.fixed: color = (200, 50, 50) 
                     else: color = COLOR_CURSOR 
-                pygame.draw.circle(surface, (30, 30, 30), pos, 6) 
-                pygame.draw.circle(surface, color, pos, 4)        
+                pygame.draw.circle(surface, (30, 30, 30), pos, 7) 
+                pygame.draw.circle(surface, color, pos, 5)        
 
         mx, my = pygame.mouse.get_pos()
         tool_color = self.toolbar.selected_tool["color"]
@@ -282,8 +291,8 @@ class Editor:
             p1 = (mx, my)
             p2 = e_pos
             points = []
-            for i in range(11):
-                t = i / 10
+            for i in range(21): # Smoother arch line
+                t = i / 20
                 bx = (1-t)**2 * p0[0] + 2*(1-t)*t * p1[0] + t**2 * p2[0]
                 by = (1-t)**2 * p0[1] + 2*(1-t)*t * p1[1] + t**2 * p2[1]
                 points.append((bx, by))

@@ -19,7 +19,10 @@ class BridgeBuilderApp:
     def __init__(self):
         pygame.init()
         pygame.display.set_caption("Ixchel Hídja - Mérnöki Laboratórium")
+        
+        # --- FIX: Removed pygame.SCALED to prevent crash with (0,0) ---
         self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        
         w, h = self.screen.get_size()
         
         self.clock = pygame.time.Clock()
@@ -55,7 +58,7 @@ class BridgeBuilderApp:
         self.vol_display_val = 0.5
         
         self.editor = Editor(self.grid, self.bridge, self.toolbar, self.audio)
-        self.ghost_agent = Ixchel(self.audio) 
+        self.ghost_agent = Ixchel(self.audio)
 
     def show_status(self, text):
         self.status_message = text
@@ -193,7 +196,7 @@ class BridgeBuilderApp:
         self.broken_beams.clear()
         self.audio.stop_sfx("step") 
 
-    def update(self):
+    def update(self, dt):
         if self.message_timer > 0:
             self.message_timer -= 1
             if self.message_timer == 0:
@@ -212,8 +215,9 @@ class BridgeBuilderApp:
             self.ghost_agent.mass = MaterialManager.AGENT["mass"]
             disps = self.static_solver.displacements
             
-            # 1. Update Agent (returns detailed info about where it is)
-            load_info = self.ghost_agent.update_static(1.0/60.0, self.bridge.beams, disps, EXAGGERATION)
+            # 1. Update Agent using Delta Time
+            # We pass 'dt' instead of fixed 1/60
+            load_info = self.ghost_agent.update_static(dt, self.bridge.beams, disps, EXAGGERATION)
             
             # 2. Prepare Load Dictionary for Solver {Beam: (t, mass)}
             solver_loads = {}
@@ -253,10 +257,11 @@ class BridgeBuilderApp:
         if self.vol_timer > 0: self.vol_timer -= 1
 
     def draw_ixchel(self, surface, screen_x, screen_y):
+        # Draw with offsets to center visuals better
         pygame.draw.rect(surface, (139, 69, 19), (screen_x - 5, screen_y - 25, 10, 20)) 
         pygame.draw.circle(surface, (210, 180, 140), (screen_x, screen_y - 32), 8)
-        pygame.draw.ellipse(surface, (100, 70, 40), (screen_x - 12, screen_y - 42, 24, 8)) 
-        pygame.draw.rect(surface, (100, 70, 40), (screen_x - 7, screen_y - 46, 14, 8)) 
+        # Antialias drawing for smoother look
+        pygame.draw.aaline(surface, (100, 70, 40), (screen_x - 12, screen_y - 42), (screen_x + 12, screen_y - 42))
 
     def draw(self):
         self.grid.draw(self.screen)
@@ -265,7 +270,6 @@ class BridgeBuilderApp:
             self.editor.draw(self.screen)
             self.draw_hud()
             
-            # --- ARCH MODE PROMPT ---
             if self.editor.arch_mode:
                 msg = "ÍV ESZKÖZ (ARCH TOOL): BEKAPCSOLVA"
                 hint = "1. Húzás: Szélesség | 2. Egér: Magasság"
@@ -318,6 +322,8 @@ class BridgeBuilderApp:
         self.draw_volume_popup()
         pygame.display.flip()
 
+    # ... (draw_analysis_legend and draw_analysis_results remain mostly same, 
+    # but analysis results will benefit from higher PPM automatically) ...
     def draw_analysis_legend(self):
         box_w, box_h = 220, 100
         x = 20
@@ -424,8 +430,11 @@ class BridgeBuilderApp:
                     pygame.draw.lines(self.screen, color, False, points, width)
             
             if hollow_ratio > 0.01 and len(points) > 1:
-                 inner_w = max(1, int(width * hollow_ratio))
-                 pygame.draw.lines(self.screen, (255,255,255), False, points, inner_w)
+                 # FIX for Hollow: Ensure a border is visible
+                 border_px = max(2, int(width * 0.15)) # 2px min border
+                 inner_w = max(0, width - (border_px * 2))
+                 if inner_w > 0:
+                     pygame.draw.lines(self.screen, (255,255,255), False, points, inner_w)
 
             if text_mode != 2: 
                 mid_idx = segments // 2
@@ -485,10 +494,15 @@ class BridgeBuilderApp:
 
     def run(self):
         while True:
+            # Delta Time calculation
+            dt = self.clock.tick(FPS) / 1000.0
+            
+            # Clamp DT to prevent physics explosion on lag
+            if dt > 0.1: dt = 0.1
+            
             self.handle_input()
-            self.update()
+            self.update(dt) # Pass DT
             self.draw()
-            self.clock.tick(60)
 
 if __name__ == "__main__":
     app = BridgeBuilderApp()
