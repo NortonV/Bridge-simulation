@@ -1,28 +1,28 @@
-# Physics Scale
-PPM = 40.0
+import pygame
 
-# Simulation Settings
-EXAGGERATION = 20.0
+# --- COLORS ---
+COLOR_BG = (20, 24, 28)
+COLOR_GRID = (40, 45, 50)
+COLOR_TEXT_MAIN = (220, 220, 220)
+COLOR_TEXT_HIGHLIGHT = (255, 215, 0)
+COLOR_UI_BG = (30, 35, 40)
+COLOR_UI_BORDER = (80, 90, 100)
 
-# --- THEME PALETTE: "The Lost City" ---
-COLOR_BG = (235, 235, 230)        # Paper/Parchment color (Keep light for drawing background later)
-COLOR_GRID_MAJOR = (180, 180, 170)
-COLOR_GRID_MINOR = (220, 220, 215)
-COLOR_AXIS = (50, 60, 50)         # Dark Jungle Green
-
-# UI Colors
-COLOR_UI_BG = (40, 45, 40, 230)   # Semi-transparent dark stone
-COLOR_UI_BORDER = (200, 180, 100) # Muted Gold
-COLOR_TEXT_MAIN = (255, 255, 240) # Off-white
-COLOR_TEXT_HIGHLIGHT = (255, 215, 0) # Gold
-
-# Material Colors (Textured look base colors)
-COLOR_WOOD = (139, 69, 19)        # Saddle Brown
-COLOR_BAMBOO = (85, 107, 47)      # Olive Green
+COLOR_WOOD = (160, 100, 50)       # Brown
+COLOR_BAMBOO = (100, 160, 60)     # Light Green
 COLOR_VINE = (34, 139, 34)        # Forest Green
-COLOR_CURSOR = (255, 165, 0)      # Bright Orange
 
-# Analysis Colors
-COLOR_TENSION = (220, 50, 50)     # Red (Húzás)
-COLOR_COMPRESSION = (50, 100, 255)# Blue (Nyomás)
-COLOR_BROKEN = (0, 0, 0)          # Black
+# --- NEW MATERIALS ---
+COLOR_STEEL = (112, 128, 144)     # Slate Gray
+COLOR_CABLE = (47, 79, 79)        # Dark Slate Gray
+COLOR_SPAGHETTI = (255, 255, 100) # Pale Yellow
+
+COLOR_CURSOR = (255, 165, 0)      # Bright Orange
+COLOR_TENSION = (255, 60, 60)     # Red
+COLOR_COMPRESSION = (60, 100, 255)# Blue
+COLOR_AXIS = (80, 80, 80)
+
+# --- CONFIG ---
+GRID_SIZE = 40
+PPM = 40.0 # Pixels Per Meter
+EXAGGERATION = 20.0 # Deformation exaggeration

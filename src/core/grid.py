@@ -44,7 +44,6 @@ class Grid:
         surface.fill(COLOR_BG)
 
         # 1. Determine Visible Range (Optimization)
-        # We calculate exactly how many meters fit on the current screen
         min_wx, _ = self.screen_to_world(0, 0)
         max_wx, _ = self.screen_to_world(self.width, self.height)
         
@@ -56,26 +55,42 @@ class Grid:
         start_y = int(min_wy) - 1
         end_y = int(max_wy) + 1
 
+        # Calculate a slightly brighter color for major grid lines
+        # (Assuming COLOR_GRID is defined in constants.py from the previous update)
+        r, g, b = COLOR_GRID
+        major_color = (min(255, r + 20), min(255, g + 20), min(255, b + 20))
+
         # 2. Draw Vertical Lines
         for i in range(start_x, end_x):
             px, _ = self.world_to_screen(i, 0)
-            # Major line every 5 meters, minor every 1 meter
-            color = COLOR_GRID_MAJOR if i % 5 == 0 else COLOR_GRID_MINOR
-            pygame.draw.line(surface, color, (px, 0), (px, self.height))
+            
+            if i % 5 == 0:
+                color = major_color
+                width = 2
+            else:
+                color = COLOR_GRID
+                width = 1
+            
+            pygame.draw.line(surface, color, (px, 0), (px, self.height), width)
 
         # 3. Draw Horizontal Lines
         for i in range(start_y, end_y):
             _, py = self.world_to_screen(0, i)
-            color = COLOR_GRID_MAJOR if i % 5 == 0 else COLOR_GRID_MINOR
-            pygame.draw.line(surface, color, (0, py), (self.width, py))
+            
+            if i % 5 == 0:
+                color = major_color
+                width = 2
+            else:
+                color = COLOR_GRID
+                width = 1
+                
+            pygame.draw.line(surface, color, (0, py), (self.width, py), width)
 
         # 4. Draw Main Axes (X=0, Y=0)
         origin_x, origin_y = self.world_to_screen(0, 0)
         
-        # Y-Axis (Green Vertical)
-        pygame.draw.line(surface, COLOR_AXIS, (origin_x, 0), (origin_x, self.height), 3)
-        # X-Axis (Green Horizontal)
-        pygame.draw.line(surface, COLOR_AXIS, (0, origin_y), (self.width, origin_y), 3)
+        # Draw axes
+        pygame.draw.line(surface, COLOR_AXIS, (origin_x, 0), (origin_x, self.height), 2)
+        pygame.draw.line(surface, COLOR_AXIS, (0, origin_y), (self.width, origin_y), 2)
         
-        # Origin Marker
-        pygame.draw.circle(surface, COLOR_AXIS, (origin_x, origin_y), 6)
+        pygame.draw.circle(surface, COLOR_AXIS, (origin_x, origin_y), 4)

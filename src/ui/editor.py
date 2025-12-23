@@ -15,6 +15,18 @@ class Editor:
         self.hover_node = None
         self.hover_beam = None
         self.drag_node = None
+        
+        # --- ARCH TOOL STATE ---
+        self.arch_mode = False
+        self.arch_stage = 0 # 0: Start-End selection, 1: Height adjustment
+        self.arch_end_node = None
+
+    def toggle_arch_mode(self):
+        self.arch_mode = not self.arch_mode
+        self.arch_stage = 0
+        self.arch_end_node = None
+        self.start_node = None
+        return self.arch_mode
 
     def play_place_sound(self, mat_type):
         if mat_type == BeamType.VINE:
@@ -27,6 +39,11 @@ class Editor:
         mouse_pressed = pygame.mouse.get_pressed()
         tool = self.toolbar.selected_tool
         
+        if self.arch_stage == 1:
+            self.hover_node = None
+            self.hover_beam = None
+            return
+
         self.hover_node = self.bridge.get_node_at(wx, wy)
         self.hover_beam = None
         if not self.hover_node:
@@ -50,10 +67,15 @@ class Editor:
 
     def handle_input(self, event, world_pos):
         wx, wy = world_pos
-        self.hover_node = self.bridge.get_node_at(wx, wy)
-        self.hover_beam = None
-        if not self.hover_node:
-            self.hover_beam = self.bridge.get_beam_at(wx, wy)
+        
+        if self.arch_stage == 0:
+            self.hover_node = self.bridge.get_node_at(wx, wy)
+            self.hover_beam = None
+            if not self.hover_node:
+                self.hover_beam = self.bridge.get_beam_at(wx, wy)
+        else:
+            self.hover_node = None
+            self.hover_beam = None
         
         tool = self.toolbar.selected_tool
         tool_type = tool["type"]
@@ -65,11 +87,31 @@ class Editor:
             
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 3: # Right Click
-                if self.hover_node:
+                # --- FIX: CANCEL BUILD ---
+                if self.start_node:
+                    self.start_node = None
+                    if self.arch_stage == 1:
+                        self.arch_stage = 0
+                        self.arch_end_node = None
+                    return
+                
+                if self.arch_stage == 1:
+                    # Cancel Arch
+                    self.arch_stage = 0
+                    self.start_node = None
+                    self.arch_end_node = None
+                elif self.hover_node:
                     self.drag_node = self.hover_node
             
             if event.button == 1: # Left Click
-                if tool_type == "DELETE":
+                if self.arch_stage == 1:
+                    self.build_arch_curve(wx, wy, tool_type)
+                    self.arch_stage = 0
+                    self.start_node = None
+                    self.arch_end_node = None
+                    self.play_place_sound(tool_type)
+                
+                elif tool_type == "DELETE":
                     pass
                 elif self.hover_node:
                     self.start_node = self.hover_node
@@ -114,7 +156,8 @@ class Editor:
                 else:
                     target_beam = self.bridge.get_beam_at(self.drag_node.x, self.drag_node.y)
                     if target_beam:
-                         self.bridge.split_beam_with_node(target_beam, self.drag_node)
+                         # --- FIX: CALL NEW METHOD ---
+                         self.bridge.connect_node_to_beam(self.drag_node, target_beam)
                          self.audio.play_sfx("wood_place")
                 
                 self.drag_node = None
@@ -127,16 +170,48 @@ class Editor:
                         end_node = self.bridge.add_node(wx, wy, is_anchor)
                     
                     if self.start_node != end_node:
-                        created = self.bridge.add_beam(self.start_node, end_node, tool_type)
-                        if created:
-                            self.play_place_sound(tool_type)
-                self.start_node = None
+                        if self.arch_mode:
+                            if self.arch_stage == 0:
+                                self.arch_end_node = end_node
+                                self.arch_stage = 1
+                        else:
+                            created = self.bridge.add_beam(self.start_node, end_node, tool_type)
+                            if created:
+                                self.play_place_sound(tool_type)
+                            self.start_node = None
+                else:
+                     self.start_node = None
+
+    def build_arch_curve(self, cx, cy, mat_type):
+        p0 = (self.start_node.x, self.start_node.y)
+        p2 = (self.arch_end_node.x, self.arch_end_node.y)
+        p1 = (cx, cy)
+        
+        segments = 8
+        prev_node = self.start_node
+        
+        for i in range(1, segments + 1):
+            t = i / segments
+            bx = (1-t)**2 * p0[0] + 2*(1-t)*t * p1[0] + t**2 * p2[0]
+            by = (1-t)**2 * p0[1] + 2*(1-t)*t * p1[1] + t**2 * p2[1]
+            
+            # --- CRITICAL FIX: SNAP TO GRID (0.5m) ---
+            bx = round(bx * 2) / 2
+            by = round(by * 2) / 2
+            
+            if i == segments:
+                current_node = self.arch_end_node
+            else:
+                # 'fixed' if it hits the ground (y <= 0)
+                current_node = self.bridge.add_node(bx, by, fixed=(by<=0))
+            
+            # This handles duplicates automatically (if start == end, add_beam returns [])
+            self.bridge.add_beam(prev_node, current_node, mat_type)
+            prev_node = current_node
 
     def draw_textured_beam(self, surface, start, end, beam_type, width, color, hollow_ratio):
-        """Draws beams with simple procedural textures."""
         pygame.draw.line(surface, color, start, end, width)
         
-        # ... (Textúra kirajzolás marad) ...
         if beam_type == BeamType.BAMBOO:
             for t in [0.25, 0.5, 0.75]:
                 tx = start[0] + (end[0] - start[0]) * t
@@ -153,9 +228,30 @@ class Editor:
                 ty = start[1] + (end[1] - start[1]) * t
                 pygame.draw.circle(surface, (50, 200, 50), (int(tx), int(ty)), 2)
         
-        # ÜREGESSÉG jelzése: FEHÉR belső sáv
+        elif beam_type == BeamType.STEEL:
+            pygame.draw.line(surface, (150, 160, 170), start, end, 2)
+
+        elif beam_type == BeamType.CABLE:
+            for t in [0.1, 0.3, 0.5, 0.7, 0.9]:
+                tx = start[0] + (end[0] - start[0]) * t
+                ty = start[1] + (end[1] - start[1]) * t
+                pygame.draw.circle(surface, (100, 100, 100), (int(tx), int(ty)), 2)
+
+        elif beam_type == BeamType.SPAGETTI:
+             dx = end[0] - start[0]
+             dy = end[1] - start[1]
+             L = math.hypot(dx, dy)
+             if L > 0:
+                 nx = -dy / L
+                 ny = dx / L
+                 offsets = [-1.5, 0, 1.5]
+                 for off in offsets:
+                     ox, oy = nx * off, ny * off
+                     s_off = (start[0] + ox, start[1] + oy)
+                     e_off = (end[0] + ox, end[1] + oy)
+                     pygame.draw.line(surface, (255, 255, 150), s_off, e_off, 1)
+
         if hollow_ratio > 0.0:
-            # Legalább 1 pixel vastag legyen
             inner_w = max(1, int(width * hollow_ratio))
             pygame.draw.line(surface, (255, 255, 255), start, end, inner_w)
 
@@ -163,23 +259,17 @@ class Editor:
         for beam in self.bridge.beams:
             start = self.grid.world_to_screen(beam.node_a.x, beam.node_a.y)
             end = self.grid.world_to_screen(beam.node_b.x, beam.node_b.y)
-            
             color = beam.color
             width = 6
-            
             if self.toolbar.selected_tool["type"] == "DELETE" and beam == self.hover_beam:
                 color = (200, 50, 50)
                 width = 8
-            
-            # Retrieve global hollow ratio for this material type
             mat_props = MaterialManager.MATERIALS.get(beam.type, {})
             current_hollow_ratio = mat_props.get("hollow_ratio", 0.0)
-            
             self.draw_textured_beam(surface, start, end, beam.type, width, color, current_hollow_ratio)
 
         for node in self.bridge.nodes:
             pos = self.grid.world_to_screen(node.x, node.y)
-            
             if node.fixed:
                 rect = pygame.Rect(pos[0]-6, pos[1]-6, 12, 12)
                 pygame.draw.rect(surface, (180, 50, 50), rect) 
@@ -190,13 +280,29 @@ class Editor:
                     if self.toolbar.selected_tool["type"] == "DELETE": 
                         if not node.fixed: color = (200, 50, 50) 
                     else: color = COLOR_CURSOR 
-                
                 pygame.draw.circle(surface, (30, 30, 30), pos, 6) 
                 pygame.draw.circle(surface, color, pos, 4)        
 
-        if self.start_node:
+        mx, my = pygame.mouse.get_pos()
+        tool_color = self.toolbar.selected_tool["color"]
+
+        if self.arch_mode and self.arch_stage == 1:
+            s_pos = self.grid.world_to_screen(self.start_node.x, self.start_node.y)
+            e_pos = self.grid.world_to_screen(self.arch_end_node.x, self.arch_end_node.y)
+            p0 = s_pos
+            p1 = (mx, my)
+            p2 = e_pos
+            points = []
+            for i in range(11):
+                t = i / 10
+                bx = (1-t)**2 * p0[0] + 2*(1-t)*t * p1[0] + t**2 * p2[0]
+                by = (1-t)**2 * p0[1] + 2*(1-t)*t * p1[1] + t**2 * p2[1]
+                points.append((bx, by))
+            pygame.draw.lines(surface, tool_color, False, points, 2)
+            pygame.draw.circle(surface, tool_color, s_pos, 4)
+            pygame.draw.circle(surface, tool_color, e_pos, 4)
+            
+        elif self.start_node:
             start = self.grid.world_to_screen(self.start_node.x, self.start_node.y)
-            mx, my = pygame.mouse.get_pos()
-            tool_color = self.toolbar.selected_tool["color"]
             pygame.draw.line(surface, tool_color, start, (mx, my), 2)
             pygame.draw.circle(surface, tool_color, (mx, my), 4)

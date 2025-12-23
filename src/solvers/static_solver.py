@@ -1,268 +1,270 @@
 import numpy as np
 import math
 from core.material_manager import MaterialManager
+from core.constants import *
 
 class StaticSolver:
     def __init__(self, bridge):
         self.bridge = bridge
-        self.results = {}          
-        self.bending_results = {}  
-        self.stress_ratios = {}    
-        self.displacements = {}    
-        self.error_msg = ""
-        self.slack_vines = set() # Track vines that are currently slack
+        self.results = {} 
+        self.bending_results = {}
+        self.stress_ratios = {} 
+        self.displacements = {}
+        self.error_msg = "OK"
+        
+        self.slack_vines = set()
 
     def is_stable(self):
-        fixed_nodes = sum(1 for n in self.bridge.nodes if n.fixed)
-        if fixed_nodes < 2:
-            self.error_msg = "Unstable: Need at least 2 anchors."
-            return False
-        return True
+        return True 
 
     def solve(self, temperature=0.0, point_load=None):
-        nodes = self.bridge.nodes
-        beams = self.bridge.beams
-        n_nodes = len(nodes)
+        self.results.clear()
+        self.stress_ratios.clear()
+        self.displacements.clear()
+        self.slack_vines.clear()
         
-        if n_nodes < 2 or not beams:
-            self.error_msg = "Empty structure"
-            return False
-
-        dof_map = {}
-        for i, node in enumerate(nodes):
-            dof_map[node] = (3*i, 3*i+1, 3*i+2)
-            
-        total_dofs = 3 * n_nodes
-        
-        # --- Iterative Solver for Tension-Only elements (Vines) ---
+        # Iterative solver to handle slack vines/cables (tension-only)
         max_iter = 10
-        self.slack_vines.clear() # Start fresh for this frame
-
-        D_global_final = None
-
         for iteration in range(max_iter):
-            K_global = np.zeros((total_dofs, total_dofs))
-            F_global = np.zeros(total_dofs)
+            # 1. Degrees of Freedom
+            nodes = self.bridge.nodes
+            beams = self.bridge.beams
+            n_nodes = len(nodes)
             
-            # Assemble Matrix
+            node_map = {node: i for i, node in enumerate(nodes)}
+            dof = 3 * n_nodes
+            
+            K_global = np.zeros((dof, dof))
+            F_global = np.zeros(dof)
+
+            # 2. Build Stiffness Matrix
             for beam in beams:
+                i = node_map[beam.node_a]
+                j = node_map[beam.node_b]
+                
                 props = MaterialManager.get_properties(beam.type)
+                
+                # Retrieve individual hollow ratio if available
+                mat_settings = MaterialManager.MATERIALS.get(beam.type, {})
+                # Note: In a full implementation, we would store hollow_ratio on the beam instance
+                # For now, we rely on the material manager default
+                
                 E = props["E"]
                 A = props["area"]
                 I = props["inertia"]
                 
-                # If vine is slack, reduce stiffness effectively to zero
-                if beam.type == "vine" and beam in self.slack_vines:
-                    E = E * 1e-6
-
-                n1, n2 = beam.node_a, beam.node_b
-                dx = n2.x - n1.x
-                dy = n2.y - n1.y
-                L = math.sqrt(dx**2 + dy**2)
-                if L < 0.001: continue 
+                # If tension-only member is in slack set, reduce stiffness to near zero
+                if beam.type in ["vine", "cable"] and beam in self.slack_vines:
+                    E = E * 1e-6 
+                
+                dx = beam.node_b.x - beam.node_a.x
+                dy = beam.node_b.y - beam.node_a.y
+                L = math.sqrt(dx*dx + dy*dy)
                 
                 c = dx / L
                 s = dy / L
                 
+                # Local Stiffness (Frame element)
                 k_local = np.array([
-                    [ E*A/L,        0,             0,           -E*A/L,       0,             0           ],
-                    [ 0,            12*E*I/L**3,   6*E*I/L**2,  0,            -12*E*I/L**3,  6*E*I/L**2  ],
-                    [ 0,            6*E*I/L**2,    4*E*I/L,     0,            -6*E*I/L**2,   2*E*I/L     ],
-                    [ -E*A/L,       0,             0,           E*A/L,        0,             0           ],
-                    [ 0,            -12*E*I/L**3,  -6*E*I/L**2, 0,            12*E*I/L**3,   -6*E*I/L**2 ],
-                    [ 0,            6*E*I/L**2,    2*E*I/L,     0,            -6*E*I/L**2,   4*E*I/L     ]
+                    [A*E/L, 0, 0, -A*E/L, 0, 0],
+                    [0, 12*E*I/L**3, 6*E*I/L**2, 0, -12*E*I/L**3, 6*E*I/L**2],
+                    [0, 6*E*I/L**2, 4*E*I/L, 0, -6*E*I/L**2, 2*E*I/L],
+                    [-A*E/L, 0, 0, A*E/L, 0, 0],
+                    [0, -12*E*I/L**3, -6*E*I/L**2, 0, 12*E*I/L**3, -6*E*I/L**2],
+                    [0, 6*E*I/L**2, 2*E*I/L, 0, -6*E*I/L**2, 4*E*I/L]
                 ])
                 
+                # Rotation Matrix
                 T = np.zeros((6, 6))
-                block = np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
-                T[0:3, 0:3] = block
-                T[3:6, 3:6] = block
+                T[0,0] = c;  T[0,1] = s
+                T[1,0] = -s; T[1,1] = c
+                T[2,2] = 1
+                T[3,3] = c;  T[3,4] = s
+                T[4,3] = -s; T[4,4] = c
+                T[5,5] = 1
                 
-                k_global = T.T @ k_local @ T
+                k_global_beam = T.T @ k_local @ T
                 
-                idxs = dof_map[n1] + dof_map[n2]
-                for i in range(6):
-                    for j in range(6):
-                        K_global[idxs[i], idxs[j]] += k_global[i, j]
-
-                # Gravity
-                g = 9.81
-                mass = props["density"] * A * L
-                weight = mass * g
-                w_total = weight / L
-                w_axial = w_total * s      
-                w_trans = -w_total * c     
-                
-                fea = np.array([
-                    -w_axial*L/2, w_trans*L/2, w_trans*L**2/12,
-                    -w_axial*L/2, w_trans*L/2, -w_trans*L**2/12
-                ])
-                
-                fea_global = T.T @ fea
-                for i in range(6):
-                    F_global[idxs[i]] += fea_global[i]
+                indices = [3*i, 3*i+1, 3*i+2, 3*j, 3*j+1, 3*j+2]
+                for r in range(6):
+                    for c_idx in range(6):
+                        K_global[indices[r], indices[c_idx]] += k_global_beam[r, c_idx]
 
                 # Thermal Load
-                if abs(temperature) > 0.01:
-                    alpha = props["alpha"]
-                    # If slack, thermal forces are also negligible
-                    E_thermal = E 
-                    thermal_force = E_thermal * A * alpha * temperature
-                    fx = thermal_force * c
-                    fy = thermal_force * s
+                alpha = props["alpha"]
+                if temperature != 0:
+                    therm_strain = alpha * temperature
+                    f_therm = -E * A * therm_strain
                     
-                    F_global[idxs[0]] -= fx
-                    F_global[idxs[1]] -= fy
-                    F_global[idxs[3]] += fx
-                    F_global[idxs[4]] += fy
+                    # Local force vector for thermal expansion (Axial only)
+                    f_local_therm = np.array([-f_therm, 0, 0, f_therm, 0, 0])
+                    f_global_therm = T.T @ f_local_therm
+                    
+                    for idx_k, global_idx in enumerate(indices):
+                        F_global[global_idx] -= f_global_therm[idx_k]
 
-                # Point Load
-                if point_load and point_load['beam'] == beam:
-                    P_mag = point_load['mass'] * 9.81
-                    t = point_load['t']
-                    P_axial = P_mag * s
-                    P_trans = -P_mag * c
+            # 3. Loads (Gravity + Custom)
+            g = 9.81
+            for beam in beams:
+                props = MaterialManager.get_properties(beam.type)
+                mass = props["area"] * beam.length * props["density"]
+                weight = mass * g
+                
+                # Split weight to nodes
+                idx_a = node_map[beam.node_a] * 3 + 1
+                idx_b = node_map[beam.node_b] * 3 + 1
+                F_global[idx_a] += weight / 2.0
+                F_global[idx_b] += weight / 2.0
+            
+            # Point Load (Agent)
+            if point_load:
+                # {beam: (t, mass)}
+                for beam, (t, mass) in point_load.items():
+                    weight = mass * g
                     
-                    a = t * L
-                    b = (1 - t) * L
+                    # Distributed load based on 't'
+                    # Simple linear interpolation for nodal loads
+                    fa = weight * (1.0 - t)
+                    fb = weight * t
                     
-                    M1 = P_trans * a * (b**2) / (L**2)
-                    M2 = -P_trans * (a**2) * b / (L**2)
-                    V1 = (P_trans * b / L) + (M1 + M2) / L
-                    V2 = (P_trans * a / L) - (M1 + M2) / L
-                    N1 = -P_axial * (b / L)
-                    N2 = -P_axial * (a / L)
-                    
-                    pl_loc = np.array([N1, V1, M1, N2, V2, M2])
-                    pl_glob = T.T @ pl_loc
-                    for i in range(6):
-                        F_global[idxs[i]] += pl_glob[i]
+                    idx_a = node_map[beam.node_a] * 3 + 1
+                    idx_b = node_map[beam.node_b] * 3 + 1
+                    F_global[idx_a] += fa
+                    F_global[idx_b] += fb
 
-            free_dofs = []
+            # 4. Boundary Conditions
+            fixed_dofs = []
             for i, node in enumerate(nodes):
-                idxs = dof_map[node]
                 if node.fixed:
-                    pass 
-                else:
-                    free_dofs.extend(idxs)
-
-            if not free_dofs:
-                self.error_msg = "Fully constrained"
-                return True
-
+                    fixed_dofs.extend([3*i, 3*i+1, 3*i+2])
+            
+            free_dofs = [x for x in range(dof) if x not in fixed_dofs]
+            
             K_reduced = K_global[np.ix_(free_dofs, free_dofs)]
             F_reduced = F_global[free_dofs]
-
+            
+            # 5. Solve
             try:
-                d_free = np.linalg.solve(K_reduced, F_reduced)
+                U_reduced = np.linalg.solve(K_reduced, F_reduced)
             except np.linalg.LinAlgError:
-                self.error_msg = "Structure Unstable (Singular Matrix)"
-                return False
-
-            D_global = np.zeros(total_dofs)
-            D_global[free_dofs] = d_free
-            D_global_final = D_global
-
-            # Check for slack vines (Compression check)
+                return False 
+            
+            U_global = np.zeros(dof)
+            U_global[free_dofs] = U_reduced
+            
+            # 6. Check for Slack Vines / Cables
             new_slack_vines = set()
+            slack_change = False
+            
             for beam in beams:
-                if beam.type != "vine": continue
+                if beam.type not in ["vine", "cable"]: continue
                 
-                n1, n2 = beam.node_a, beam.node_b
-                idxs = dof_map[n1] + dof_map[n2]
-                u_vals = D_global[list(idxs)] # u1, v1, r1, u2, v2, r2
+                i = node_map[beam.node_a]
+                j = node_map[beam.node_b]
                 
-                dx = n2.x - n1.x
-                dy = n2.y - n1.y
-                L = math.sqrt(dx**2 + dy**2)
-                c, s = dx/L, dy/L
+                ua = U_global[3*i:3*i+2]
+                ub = U_global[3*j:3*j+2]
                 
-                # Axial deformation
-                u1, v1 = u_vals[0], u_vals[1]
-                u2, v2 = u_vals[3], u_vals[4]
+                dx = beam.node_b.x - beam.node_a.x
+                dy = beam.node_b.y - beam.node_a.y
+                L = math.sqrt(dx*dx + dy*dy)
                 
-                u_axial_1 = u1*c + v1*s
-                u_axial_2 = u2*c + v2*s
-                delta_L = u_axial_2 - u_axial_1
+                # Calculate change in length (projection of displacement onto axis)
+                delta_l = ((ub[0]-ua[0])*dx + (ub[1]-ua[1])*dy) / L
                 
-                # If shortened (compression), mark as slack
-                if delta_L < -1e-9:
+                # Thermal effect
+                props = MaterialManager.get_properties(beam.type)
+                therm_delta = props["alpha"] * temperature * L
+                
+                # Net elongation
+                net_elongation = delta_l - therm_delta
+                
+                # If shortened (compressed), it goes slack
+                if net_elongation < -1e-9:
                     new_slack_vines.add(beam)
             
-            # Convergence check
-            if new_slack_vines == self.slack_vines:
-                break # Converged
-            else:
+            if new_slack_vines != self.slack_vines:
                 self.slack_vines = new_slack_vines
+                slack_change = True
+            
+            if not slack_change:
+                break # Converged
 
-        # Store Final Results
-        self.displacements.clear()
+        # --- POST PROCESSING ---
         for i, node in enumerate(nodes):
-             idx = 3 * i
-             self.displacements[node] = (D_global_final[idx], D_global_final[idx+1], D_global_final[idx+2])
+            self.displacements[node] = (U_global[3*i], U_global[3*i+1], U_global[3*i+2])
 
-        self.results.clear()
-        self.bending_results.clear()
-        self.stress_ratios.clear()
-        
         for beam in beams:
-            n1, n2 = beam.node_a, beam.node_b
+            i = node_map[beam.node_a]
+            j = node_map[beam.node_b]
+            
+            u_elem = np.concatenate((U_global[3*i:3*i+3], U_global[3*j:3*j+3]))
+            
+            dx = beam.node_b.x - beam.node_a.x
+            dy = beam.node_b.y - beam.node_a.y
+            L = math.sqrt(dx*dx + dy*dy)
+            c = dx/L; s = dy/L
+            
             props = MaterialManager.get_properties(beam.type)
+            E = props["E"]
+            A = props["area"]
+            I = props["inertia"]
             
-            idxs = dof_map[n1] + dof_map[n2]
-            u_global = D_global_final[list(idxs)]
-            
-            dx = n2.x - n1.x
-            dy = n2.y - n1.y
-            L = math.sqrt(dx**2 + dy**2)
-            c, s = dx/L, dy/L
-            
+            # Local displacements
             T = np.zeros((6, 6))
-            block = np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
-            T[0:3, 0:3] = block
-            T[3:6, 3:6] = block
+            T[0,0] = c;  T[0,1] = s
+            T[1,0] = -s; T[1,1] = c
+            T[2,2] = 1
+            T[3,3] = c;  T[3,4] = s
+            T[4,3] = -s; T[4,4] = c
+            T[5,5] = 1
             
-            u_local = T @ u_global
+            u_local = T @ u_elem
             
-            # If slack, force is zero
+            # Axial Force (N = AE/L * delta_u_x)
+            axial_strain = (u_local[3] - u_local[0]) / L
+            
+            # Thermal correction for stress
+            therm_strain = props["alpha"] * temperature
+            mech_strain = axial_strain - therm_strain
+            
+            axial_force = E * A * mech_strain
+            
             if beam in self.slack_vines:
-                self.results[beam] = 0.0
-                self.bending_results[beam] = 0.0
-                self.stress_ratios[beam] = 0.0
-                beam.stress = 0.0
-                continue
+                axial_force = 0.0
 
-            E, A, I = props["E"], props["area"], props["inertia"]
-            k_local = np.array([
-                [ E*A/L,        0,             0,           -E*A/L,       0,             0           ],
-                [ 0,            12*E*I/L**3,   6*E*I/L**2,  0,            -12*E*I/L**3,  6*E*I/L**2  ],
-                [ 0,            6*E*I/L**2,    4*E*I/L,     0,            -6*E*I/L**2,   2*E*I/L     ],
-                [ -E*A/L,       0,             0,           E*A/L,        0,             0           ],
-                [ 0,            -12*E*I/L**3,  -6*E*I/L**2, 0,            12*E*I/L**3,   -6*E*I/L**2 ],
-                [ 0,            6*E*I/L**2,    2*E*I/L,     0,            -6*E*I/L**2,   4*E*I/L     ]
-            ])
+            # Bending Moment (Simplified max moment)
+            # M = 6EI/L^2 * (uy_a - uy_b) ... roughly
+            # Not fully accurate for frame, but good for vis
+            # Detailed: M_a = 2EI/L (2theta_a + theta_b - 3(uy_b-uy_a)/L)
             
-            f_local = k_local @ u_local
+            theta_a = u_local[2]
+            theta_b = u_local[5]
+            relative_disp = (u_local[4] - u_local[1]) / L
             
-            axial_force = f_local[3] 
-            max_moment = max(abs(f_local[2]), abs(f_local[5]))
+            moment_a = (2*E*I/L) * (2*theta_a + theta_b - 3*relative_disp)
+            moment_b = (2*E*I/L) * (2*theta_b + theta_a - 3*relative_disp)
+            max_moment = max(abs(moment_a), abs(moment_b))
             
-            sigma_axial = abs(axial_force) / A
-            sigma_bending = (max_moment * (props["thickness"] / 2.0)) / I
+            # Stress Calc
+            # sigma = F/A + M*y/I
+            sigma_axial = axial_force / A
+            sigma_bend = max_moment * (props["thickness"]/2) / I
             
-            total_stress = sigma_axial + sigma_bending
+            total_stress = abs(sigma_axial) + abs(sigma_bend)
+            
             stress_ratio = total_stress / props["strength"]
             
-            bending_force_equiv = sigma_bending * A
-
-            if axial_force < 0 and beam.type != "vine":
-                P_cr = (math.pi**2 * E * I) / (L**2)
+            # Buckling Check for Compression (Euler)
+            # Only for non-cables
+            if axial_force < 0 and beam.type not in ["vine", "cable"]:
+                K = 1.0 # Effective length factor
+                P_cr = (math.pi**2 * E * I) / ((K*L)**2)
                 if abs(axial_force) > P_cr:
-                    stress_ratio = 999.0 
+                    stress_ratio = 999.0 # Instant fail
             
             self.results[beam] = axial_force
-            self.bending_results[beam] = bending_force_equiv 
+            self.bending_results[beam] = max_moment # Store moment force equivalent for simpler vis
             self.stress_ratios[beam] = stress_ratio
-            beam.stress = min(1.0, stress_ratio)
 
         return True

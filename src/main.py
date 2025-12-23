@@ -35,13 +35,12 @@ class BridgeBuilderApp:
         self.mode = "BUILD"
         self.static_solver = None
         self.broken_beams = set()
-        self.simulation_frozen = False # Flag to freeze simulation on break
+        self.simulation_frozen = False 
         
         self.error_message = None
         self.status_message = None
         self.message_timer = 0
         
-        # Setup Default Scene
         self.bridge.add_node(-15, 10, fixed=True)
         self.bridge.add_node(15, 10, fixed=True)
 
@@ -99,7 +98,12 @@ class BridgeBuilderApp:
                      self.prop_menu.toggle()
                 if event.key == pygame.K_m: self.prop_menu.toggle()
                 
-                # Hotkeys
+                # --- ARCH TOGGLE ---
+                if event.key == pygame.K_a and self.mode == "BUILD":
+                    state = self.editor.toggle_arch_mode()
+                    s_str = "BE" if state else "KI"
+                    self.show_status(f"Ív Eszköz: {s_str}")
+
                 if event.key == pygame.K_v: 
                     self.prop_menu.toggle_view_mode()
                 if event.key == pygame.K_t: 
@@ -208,28 +212,29 @@ class BridgeBuilderApp:
                 return
 
             self.ghost_agent.mass = MaterialManager.AGENT["mass"]
-            # Use the same exaggeration factor as the renderer (20.0)
             disps = self.static_solver.displacements
             
-            # Pass displacements and exaggeration to the agent
+            # 1. Update Agent (returns detailed info about where it is)
             load_info = self.ghost_agent.update_static(1.0/60.0, self.bridge.beams, disps, EXAGGERATION)
             
+            # 2. Prepare Load Dictionary for Solver {Beam: (t, mass)}
+            solver_loads = {}
+            if load_info and 'beam' in load_info:
+                solver_loads[load_info['beam']] = (load_info['t'], load_info['mass'])
+
+            # 3. Solve with new loads
             delta_T = MaterialManager.SETTINGS["sim_temp"] - MaterialManager.SETTINGS["base_temp"]
-            self.static_solver.solve(temperature=delta_T, point_load=load_info)
+            self.static_solver.solve(temperature=delta_T, point_load=solver_loads)
             
             new_break = False
             for beam in self.bridge.beams:
                 f_axial = abs(self.static_solver.results.get(beam, 0))
                 f_bend = abs(self.static_solver.bending_results.get(beam, 0))
-                
                 total_load_N = f_axial + f_bend
-                
-                if total_load_N > max_force_val: 
-                    max_force_val = total_load_N
+                if total_load_N > max_force_val: max_force_val = total_load_N
                 
                 ratio = self.static_solver.stress_ratios.get(beam, 0)
                 pct = ratio * 100.0
-                
                 if pct > max_perc: max_perc = pct
                 
                 if ratio >= 1.0: 
@@ -265,6 +270,18 @@ class BridgeBuilderApp:
             self.editor.draw(self.screen)
             self.draw_hud()
             
+            # --- ARCH MODE PROMPT ---
+            if self.editor.arch_mode:
+                msg = "ÍV ESZKÖZ (ARCH TOOL): BEKAPCSOLVA"
+                hint = "1. Húzás: Szélesség | 2. Egér: Magasság"
+                
+                font_bg = pygame.font.SysFont("arial", 16, bold=True)
+                t1 = font_bg.render(msg, True, (255, 200, 50))
+                t2 = font_bg.render(hint, True, (200, 200, 200))
+                
+                self.screen.blit(t1, (20, 50))
+                self.screen.blit(t2, (20, 75))
+            
         elif self.mode == "ANALYSIS":
             self.draw_analysis_results()
             if self.ghost_agent.active:
@@ -299,7 +316,7 @@ class BridgeBuilderApp:
             self.screen.blit(text, rect)
         
         if self.mode == "BUILD":
-            help_str = "SPACE: Szimuláció | M: Menü | G: Grafikon"
+            help_str = "SPACE: Szimuláció | M: Menü | A: Ív Eszköz (Be/Ki) | G: Grafikon"
             help_txt = self.font.render(help_str, True, (80, 90, 80))
             self.screen.blit(help_txt, (self.screen.get_width() - help_txt.get_width() - 20, 20))
         
@@ -335,7 +352,6 @@ class BridgeBuilderApp:
          view_mode = self.prop_menu.view_mode 
          text_mode = self.prop_menu.text_mode
          
-         # 1. Draw Nodes
          for node in self.bridge.nodes:
             dx, dy, _ = self.static_solver.displacements.get(node, (0,0,0))
             def_x = node.x + dx * EXAGGERATION
@@ -344,7 +360,6 @@ class BridgeBuilderApp:
             color = (180, 50, 50) if node.fixed else (80, 80, 80)
             pygame.draw.circle(self.screen, color, pos, 5)
 
-         # 2. Draw Beams (Curved)
          for beam, force in self.static_solver.results.items():
             da_x, da_y, da_theta = self.static_solver.displacements.get(beam.node_a, (0,0,0))
             db_x, db_y, db_theta = self.static_solver.displacements.get(beam.node_b, (0,0,0))
@@ -384,20 +399,15 @@ class BridgeBuilderApp:
             
             props = MaterialManager.get_properties(beam.type)
             width = max(2, int(props['thickness'] * PPM))
-            
             mat_settings = MaterialManager.MATERIALS.get(beam.type, {})
             hollow_ratio = mat_settings.get("hollow_ratio", 0.0)
-            
             ratio = self.static_solver.stress_ratios.get(beam, 0.0)
             
-            # --- COLORING LOGIC ---
             if beam in self.broken_beams:
-                 # Draw Red/Black stripes
                  if len(points) > 1:
                     for i in range(len(points) - 1):
                         p_start = points[i]
                         p_end = points[i+1]
-                        # Alternate colors: Red and Black
                         seg_color = (255, 0, 0) if (i % 2 == 0) else (0, 0, 0)
                         pygame.draw.line(self.screen, seg_color, p_start, p_end, width)
             else:
@@ -418,7 +428,6 @@ class BridgeBuilderApp:
                 if len(points) > 1:
                     pygame.draw.lines(self.screen, color, False, points, width)
             
-            # White hollow inner line (only if not completely solid)
             if hollow_ratio > 0.01 and len(points) > 1:
                  inner_w = max(1, int(width * hollow_ratio))
                  pygame.draw.lines(self.screen, (255,255,255), False, points, inner_w)

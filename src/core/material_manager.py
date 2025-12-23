@@ -3,7 +3,6 @@ import math
 class MaterialManager:
     # --- GLOBAL SETTINGS (Saved/Loaded) ---
     SETTINGS = {
-        # "hollow_ratio" eltávolítva, mostantól anyagonként van
         "base_temp": 25.0,     # Construction temperature (°C)
         "sim_temp": 25.0       # Current Simulation temperature (°C)
     }
@@ -16,7 +15,7 @@ class MaterialManager:
             "strength": 40e6,   # 40 MPa
             "alpha": 5e-6,      
             "thickness": 0.20,  # 20 cm
-            "hollow_ratio": 0.0 # 0% üregesség alapértelmezetten
+            "hollow_ratio": 0.0 
         },
         "bamboo": {
             "E": 18e9,          
@@ -33,6 +32,30 @@ class MaterialManager:
             "alpha": 2e-6,      
             "thickness": 0.05,
             "hollow_ratio": 0.0
+        },
+        "steel": {
+            "E": 200e9,         # 200 GPa
+            "density": 7850.0,  
+            "strength": 250e6,  # 250 MPa
+            "alpha": 12e-6,
+            "thickness": 0.05,  # 5cm thick beams
+            "hollow_ratio": 0.0
+        },
+        "cable": {
+            "E": 160e9,         # 160 GPa
+            "density": 7850.0,
+            "strength": 1000e6, # 1000 MPa
+            "alpha": 12e-6,
+            "thickness": 0.02,  # 2cm thick
+            "hollow_ratio": 0.0
+        },
+        "spaghetti": {
+            "E": 3e9,           # 3 GPa
+            "density": 1500.0,
+            "strength": 10e6,   # 10 MPa
+            "alpha": 0.0,       
+            "thickness": 0.03,  
+            "hollow_ratio": 0.0
         }
     }
     
@@ -45,7 +68,6 @@ class MaterialManager:
     def get_geometry(thickness, hollow_ratio):
         """Calculates Area (A) and Inertia (I) based on hollow ratio."""
         R = thickness / 2.0
-        # Clamp ratio between 0.0 and 0.99
         ratio = max(0.0, min(0.99, hollow_ratio))
         r = R * ratio
         
@@ -56,12 +78,8 @@ class MaterialManager:
 
     @staticmethod
     def get_properties(mat_type, hollow_ratio=None):
-        """Returns physical parameters for simulation.
-           If hollow_ratio is None, it uses the material default.
-        """
         base = MaterialManager.MATERIALS.get(mat_type, MaterialManager.MATERIALS["wood"])
         
-        # Ha nincs specifikus arány megadva (pl. már létező elemnél), akkor vegye az anyag alapbeállítását
         if hollow_ratio is None:
             hollow_ratio = base.get("hollow_ratio", 0.0)
             
