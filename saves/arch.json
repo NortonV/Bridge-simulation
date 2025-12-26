@@ -1,0 +1,333 @@
+{
+    "version": 1.1,
+    "materials": {
+        "wood": {
+            "E": 11000000000.0,
+            "density": 600.0,
+            "strength": 40000000.0,
+            "alpha": 5e-06,
+            "thickness": 0.2,
+            "hollow_ratio": 0.0
+        },
+        "bamboo": {
+            "E": 18000000000.0,
+            "density": 700.0,
+            "strength": 60000000.0,
+            "alpha": 1e-05,
+            "thickness": 0.15,
+            "hollow_ratio": 0.0
+        },
+        "steel": {
+            "E": 200000000000.0,
+            "density": 7850.0,
+            "strength": 250000000.0,
+            "alpha": 1.2e-05,
+            "thickness": 0.05,
+            "hollow_ratio": 0.0
+        },
+        "spaghetti": {
+            "E": 3000000000.0,
+            "density": 1500.0,
+            "strength": 10000000.0,
+            "alpha": 0.0,
+            "thickness": 0.03,
+            "hollow_ratio": 0.0
+        }
+    },
+    "settings": {
+        "base_temp": 25.0,
+        "sim_temp": 25.0
+    },
+    "nodes": [
+        {
+            "x": -15.0,
+            "y": 15.0,
+            "fixed": true
+        },
+        {
+            "x": 15.0,
+            "y": 15.0,
+            "fixed": true
+        },
+        {
+            "x": 15.0,
+            "y": 5.0,
+            "fixed": false
+        },
+        {
+            "x": -15.0,
+            "y": 5.0,
+            "fixed": false
+        },
+        {
+            "x": -11.0,
+            "y": 8.5,
+            "fixed": false
+        },
+        {
+            "x": -7.5,
+            "y": 11.0,
+            "fixed": false
+        },
+        {
+            "x": -4.0,
+            "y": 12.5,
+            "fixed": false
+        },
+        {
+            "x": 0.0,
+            "y": 13.0,
+            "fixed": false
+        },
+        {
+            "x": 4.0,
+            "y": 12.5,
+            "fixed": false
+        },
+        {
+            "x": 7.5,
+            "y": 11.0,
+            "fixed": false
+        },
+        {
+            "x": 11.0,
+            "y": 8.5,
+            "fixed": false
+        },
+        {
+            "x": -11.0,
+            "y": 15.0,
+            "fixed": false
+        },
+        {
+            "x": -7.5,
+            "y": 15.0,
+            "fixed": false
+        },
+        {
+            "x": -4.0,
+            "y": 15.0,
+            "fixed": false
+        },
+        {
+            "x": 0.0,
+            "y": 15.0,
+            "fixed": false
+        },
+        {
+            "x": 4.0,
+            "y": 15.0,
+            "fixed": false
+        },
+        {
+            "x": 7.500000000000001,
+            "y": 15.0,
+            "fixed": false
+        },
+        {
+            "x": 11.0,
+            "y": 15.0,
+            "fixed": false
+        }
+    ],
+    "beams": [
+        {
+            "u": 1,
+            "v": 2,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 0,
+            "v": 3,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 3,
+            "v": 4,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 4,
+            "v": 5,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 5,
+            "v": 6,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 6,
+            "v": 7,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 8,
+            "v": 9,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 9,
+            "v": 10,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 10,
+            "v": 2,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 11,
+            "v": 0,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 4,
+            "v": 11,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 12,
+            "v": 11,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 5,
+            "v": 12,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 13,
+            "v": 12,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 6,
+            "v": 13,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 14,
+            "v": 13,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 7,
+            "v": 14,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 15,
+            "v": 14,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 8,
+            "v": 15,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 16,
+            "v": 15,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 9,
+            "v": 16,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 1,
+            "v": 17,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 17,
+            "v": 16,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 10,
+            "v": 17,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 0,
+            "v": 4,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 11,
+            "v": 5,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 12,
+            "v": 6,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 13,
+            "v": 7,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 8,
+            "v": 7,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 7,
+            "v": 15,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 8,
+            "v": 16,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 9,
+            "v": 17,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 10,
+            "v": 1,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        }
+    ]
+}

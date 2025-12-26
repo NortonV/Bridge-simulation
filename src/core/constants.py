@@ -22,7 +22,5 @@ COLOR_AXIS = (80, 80, 80)
 
 # --- CONFIG ---
 GRID_SIZE = 40
-# Increased PPM from 40.0 to 60.0 for higher resolution/visibility
 PPM = 40.0 
-EXAGGERATION = 20.0 
 FPS = 144  # Target Framerate

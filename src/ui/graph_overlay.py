@@ -9,16 +9,15 @@ class GraphOverlay:
         self.max_len = width - 40  # Reduced width slightly to make room for right-side text
         self.visible = False
         self.eng_max_force = 100.0 # Tracks only Force peaks now
-        
+
         # Initialize Slider
-        self.settings = settings_dict
+        self.sim_settings = settings_dict if settings_dict else {"exaggeration": 100.0}
         self.slider = None
-        if self.settings is not None:
+        if self.sim_settings is not None:
              # Slider positioned 10px below the graph
              self.slider_rect = pygame.Rect(x, y + height + 20, width, 14)
-             # Log scale is often better for 1-1000, but user requested default 100
              # Log scale slider: Min 1, Max 1000, Default 100 is perfectly in middle if Log
-             self.slider = Slider("Torzítás (Exaggeration)", "x", 1.0, 1000.0, self.settings, "exaggeration", is_log=True)
+             self.slider = Slider("Torzítás (Exaggeration)", "x", 1.0, 1000.0, self.sim_settings, "exaggeration", is_log=True)
 
     def toggle(self):
         self.visible = not self.visible

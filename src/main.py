@@ -1,526 +1,508 @@
+"""
+Ixchel's Bridge - Engineering Laboratory
+
+A physics-based bridge building and analysis simulation.
+"""
 import pygame
 import sys
-import math
-import numpy as np
 from core.constants import *
 from core.grid import Grid
+from core.game_state import GameState, GameMode
+from core.material_manager import MaterialManager
+from core.serializer import Serializer
 from entities.bridge import Bridge
 from entities.agent import Ixchel
 from ui.editor import Editor
 from ui.toolbar import Toolbar
-from solvers.static_solver import StaticSolver
-from core.serializer import Serializer
 from ui.graph_overlay import GraphOverlay
-from ui.property_menu import PropertyMenu 
-from core.material_manager import MaterialManager
+from ui.property_menu import PropertyMenu
+from ui.renderers import AnalysisRenderer, VolumePopup
+from solvers.static_solver import StaticSolver
 from audio.audio_manager import AudioManager
 
+
 class BridgeBuilderApp:
+    """Main application class managing game loop and high-level state."""
+    
+    # Physics time step limit to prevent instability
+    MAX_DT = 0.1
+    
     def __init__(self):
         pygame.init()
         pygame.display.set_caption("Ixchel Hídja - Mérnöki Laboratórium")
         
-        # --- FIX: Removed pygame.SCALED to prevent crash with (0,0) ---
+        # Create fullscreen window
         self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-        
         w, h = self.screen.get_size()
         
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont("arial", 16, bold=True)
-        self.large_font = pygame.font.SysFont("arial", 30, bold=True)
+        self.fonts = self._init_fonts()
         
+        # Core systems
         self.grid = Grid(w, h)
         self.bridge = Bridge()
+        self.state = GameState()
+        
+        # UI components
         self.toolbar = Toolbar(w, h)
-        
-        # Dynamic settings for simulation
-        self.sim_settings = {
-            "exaggeration": 100.0 
-        }
-        
-        # Pass settings to GraphOverlay
-        self.graph = GraphOverlay(20, h - 350, 400, 200, self.sim_settings)
+        self.graph = GraphOverlay(20, h - 350, 400, 200, {"exaggeration": 100.0})
         self.prop_menu = PropertyMenu(w, h)
         
-        self.mode = "BUILD"
-        self.static_solver = None
-        self.broken_beams = set()
-        self.simulation_frozen = False 
+        # Simulation
+        self.ghost_agent = Ixchel(None)  # Audio assigned later
         
-        self.error_message = None
-        self.status_message = None
-        self.message_timer = 0
+        # Audio
+        self.audio = self._init_audio()
+        self.ghost_agent.audio = self.audio
         
+        # Editor (needs audio)
+        self.editor = Editor(self.grid, self.bridge, self.toolbar, self.audio)
+        
+        # Renderers
+        self.analysis_renderer = AnalysisRenderer(self.grid, self.prop_menu)
+        self.volume_popup = VolumePopup()
+        
+        # Create initial anchor points
+        self._create_initial_anchors()
+
+    def _init_fonts(self):
+        """Initialize font objects."""
+        return {
+            'normal': pygame.font.SysFont("arial", 16, bold=True),
+            'large': pygame.font.SysFont("arial", 30, bold=True),
+        }
+
+    def _init_audio(self):
+        """Initialize audio system and load sounds."""
+        audio = AudioManager()
+        audio.load_music("theme.mp3")
+        audio.play_music()
+        audio.load_sfx("wood_place", "wood_place.mp3")
+        audio.load_sfx("step", "step.mp3")
+        audio.load_sfx("wood_break", "wood_break.mp3")
+        return audio
+
+    def _create_initial_anchors(self):
+        """Create the two starting anchor points."""
         self.bridge.add_node(-15, 10, fixed=True)
         self.bridge.add_node(15, 10, fixed=True)
 
-        self.audio = AudioManager()
-        self.audio.load_music("theme.mp3")
-        self.audio.play_music()
-        self.audio.load_sfx("wood_place", "wood_place.mp3")
-        self.audio.load_sfx("step", "step.mp3") 
-        self.audio.load_sfx("wood_break", "wood_break.mp3")
-
-        self.vol_timer = 0
-        self.vol_display_val = 0.5
-        
-        self.editor = Editor(self.grid, self.bridge, self.toolbar, self.audio)
-        self.ghost_agent = Ixchel(self.audio)
-
-    def show_status(self, text):
-        self.status_message = text
-        self.error_message = None
-        self.message_timer = 180
-
-    def show_error(self, text):
-        self.error_message = text
-        self.status_message = None
-        self.message_timer = 180
+    def run(self):
+        """Main game loop."""
+        while True:
+            dt = self.clock.tick(FPS) / 1000.0
+            # Clamp dt to prevent physics explosions
+            dt = min(dt, self.MAX_DT)
+            
+            self.handle_input()
+            self.update(dt)
+            self.draw()
 
     def handle_input(self):
+        """Process all input events."""
         mx, my = pygame.mouse.get_pos()
         world_pos = self.grid.snap(mx, my)
         keys = pygame.key.get_pressed()
-
-        if keys[pygame.K_UP]:
-            self.audio.change_volume(0.01)
-            self.vol_display_val = self.audio.volume
-            self.vol_timer = 120
-        if keys[pygame.K_DOWN]:
-            self.audio.change_volume(-0.01)
-            self.vol_display_val = self.audio.volume
-            self.vol_timer = 120
-
-        if self.mode == "BUILD":
+        
+        # Volume controls
+        self._handle_volume_input(keys)
+        
+        # Continuous input (for delete tool)
+        if self.state.is_build_mode:
             self.editor.handle_continuous_input(world_pos)
-
+        
+        # Discrete events
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: self.quit()
+            if event.type == pygame.QUIT:
+                self.quit()
             
-            # Handle Graph/Slider Input
-            if self.mode == "ANALYSIS":
+            # Graph slider input
+            if self.state.is_analysis_mode:
                 self.graph.handle_input(event)
-
+            
+            # Property menu (consumes events if open)
             if self.prop_menu.handle_input(event):
                 if self.prop_menu.should_quit:
                     self.quit()
-                continue 
+                continue
             
+            # Keyboard shortcuts
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE: 
-                     self.prop_menu.toggle()
-                if event.key == pygame.K_m: self.prop_menu.toggle()
-                
-                # --- ARCH TOGGLE ---
-                if event.key == pygame.K_a and self.mode == "BUILD":
-                    state = self.editor.toggle_arch_mode()
-                    s_str = "BE" if state else "KI"
-                    self.show_status(f"Ív Eszköz: {s_str}")
-
-                if event.key == pygame.K_v:
-                    self.prop_menu.toggle_view_mode()
-                if event.key == pygame.K_t:
-                    self.prop_menu.toggle_text_mode()
-                
-                if event.key == pygame.K_SPACE:
-                    if self.mode == "BUILD":
-                        self.run_static_analysis()
-                    elif self.mode == "ANALYSIS":
-                        self.stop_analysis()
+                if self._handle_keyboard(event.key, keys):
                     continue
-
-                if event.key == pygame.K_g: self.graph.toggle()
-
-                is_ctrl = (keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL])
-                if is_ctrl and event.key == pygame.K_s:
-                    if self.mode == "BUILD":
-                        success, msg = Serializer.save_as(self.bridge)
-                        if success: self.show_status(msg)
-                        else: self.show_error(msg)
-                if is_ctrl and event.key == pygame.K_l:
-                    if self.mode == "BUILD":
-                        success, msg = Serializer.open_file(self.bridge)
-                        if success: self.show_status(msg)
-                        else: self.show_error(msg)
-                        self.graph.reset_data()
-                
-                if self.mode == "ANALYSIS":
-                    if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_x]:
-                        self.stop_analysis()
-                        continue
-
+            
+            # Mouse wheel for volume
             if event.type == pygame.MOUSEWHEEL:
-                if event.y != 0:
-                    change = event.y * 0.05
-                    self.audio.change_volume(change)
-                    self.vol_display_val = self.audio.volume
-                    self.vol_timer = 120 
-
+                self._handle_scroll_volume(event.y)
+            
+            # Toolbar input
             self.toolbar.handle_input(event)
             
-            if self.mode == "BUILD":
+            # Editor input (build mode only)
+            if self.state.is_build_mode:
                 self.editor.handle_input(event, world_pos)
         
-        if self.mode == "ANALYSIS":
-            if not self.simulation_frozen:
-                self.ghost_agent.handle_input()
+        # Agent input (analysis mode only)
+        if self.state.can_simulate:
+            self.ghost_agent.handle_input()
 
-    def run_static_analysis(self):
-        self.ghost_agent.mass = MaterialManager.AGENT["mass"]
+    def _handle_volume_input(self, keys):
+        """Handle continuous volume adjustment."""
+        if keys[pygame.K_UP]:
+            self.audio.change_volume(0.01)
+            self.state.update_volume_display(self.audio.volume)
+        if keys[pygame.K_DOWN]:
+            self.audio.change_volume(-0.01)
+            self.state.update_volume_display(self.audio.volume)
+
+    def _handle_keyboard(self, key, keys):
+        """
+        Handle keyboard shortcuts.
+        
+        Returns:
+            True if event was handled, False otherwise
+        """
+        # Menu toggles
+        if key in [pygame.K_ESCAPE, pygame.K_m]:
+            self.prop_menu.toggle()
+            return True
+        
+        # Arch mode toggle (build mode only)
+        if key == pygame.K_a and self.state.is_build_mode:
+            state_str = "BE" if self.editor.toggle_arch_mode() else "KI"
+            self.state.show_status(f"Ív Eszköz: {state_str}")
+            return True
+        
+        # View/text mode toggles
+        if key == pygame.K_v:
+            self.prop_menu.toggle_view_mode()
+            return True
+        if key == pygame.K_t:
+            self.prop_menu.toggle_text_mode()
+            return True
+        
+        # Simulation toggle
+        if key == pygame.K_SPACE:
+            if self.state.is_build_mode:
+                self._start_simulation()
+            else:
+                self._stop_simulation()
+            return True
+        
+        # Graph toggle
+        if key == pygame.K_g:
+            self.graph.toggle()
+            return True
+        
+        # File operations (Ctrl+S, Ctrl+L)
+        is_ctrl = (keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL])
+        if is_ctrl and self.state.is_build_mode:
+            if key == pygame.K_s:
+                self._save_file()
+                return True
+            if key == pygame.K_l:
+                self._load_file()
+                return True
+        
+        # Tool switches during analysis exit simulation
+        if self.state.is_analysis_mode:
+            if key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_x]:
+                self._stop_simulation()
+                return True
+        
+        return False
+
+    def _handle_scroll_volume(self, scroll_y):
+        """Handle mouse wheel volume adjustment."""
+        if scroll_y != 0:
+            change = scroll_y * 0.05
+            self.audio.change_volume(change)
+            self.state.update_volume_display(self.audio.volume)
+
+    def _start_simulation(self):
+        """Begin static analysis and simulation mode."""
+        # Prepare solver
         solver = StaticSolver(self.bridge)
+        
+        # Check stability
         if not solver.is_stable():
             if "Mechanism" in solver.error_msg:
-                self.show_error("Instabil szerkezet! (Mechanizmus)")
+                self.state.show_error("Instabil szerkezet! (Mechanizmus)")
             else:
-                self.show_error(solver.error_msg)
+                self.state.show_error(solver.error_msg)
             return
         
+        # Initial solve
         success = solver.solve(temperature=0.0, point_load=None)
         if not success:
-            self.show_error("Instabil: Szinguláris Mátrix")
-        else:
-            self.static_solver = solver
-            self.mode = "ANALYSIS"
-            self.simulation_frozen = False
-            self.show_status(f"Szimuláció (Tömeg: {self.ghost_agent.mass:.1f}kg)")
-            self.graph.reset_data()
-            self.broken_beams.clear()
-            self.graph.visible = True
-            
-            start_node = None
-            min_x = 9999
-            for beam in self.bridge.beams:
-                if beam.type == "wood":
-                    if beam.node_a.x < min_x: min_x = beam.node_a.x; start_node = beam.node_a
-                    if beam.node_b.x < min_x: min_x = beam.node_b.x; start_node = beam.node_b
-            if start_node:
-                self.ghost_agent.spawn(start_node.x, start_node.y + 1.0)
-            else:
-                self.ghost_agent.active = False
+            self.state.show_error("Instabil: Szinguláris Mátrix")
+            return
+        
+        # Enter analysis mode
+        self.state.enter_analysis_mode(solver)
+        self.prop_menu.set_analysis_mode(True)  # Switch temp slider to sim mode
+        self.graph.reset_data()
+        self.graph.visible = True
+        
+        # Spawn agent at leftmost wood beam
+        self._spawn_agent()
+        
+        agent_mass = MaterialManager.AGENT["mass"]
+        self.state.show_status(f"Szimuláció (Tömeg: {agent_mass:.1f}kg)")
 
-    def stop_analysis(self):
-        self.mode = "BUILD"
-        self.static_solver = None
-        self.simulation_frozen = False
+    def _spawn_agent(self):
+        """Spawn agent at the leftmost wood beam."""
+        start_node = None
+        min_x = 9999
+        
+        for beam in self.bridge.beams:
+            if beam.type == "wood":
+                if beam.node_a.x < min_x:
+                    min_x = beam.node_a.x
+                    start_node = beam.node_a
+                if beam.node_b.x < min_x:
+                    min_x = beam.node_b.x
+                    start_node = beam.node_b
+        
+        if start_node:
+            self.ghost_agent.spawn(start_node.x, start_node.y + 1.0)
+        else:
+            self.ghost_agent.active = False
+
+    def _stop_simulation(self):
+        """Exit simulation mode and return to build mode."""
+        self.state.enter_build_mode()
         self.toolbar.active_index = 0
-        self.show_status("Építés Mód")
-        self.error_message = None
-        self.broken_beams.clear()
-        self.audio.stop_sfx("step") 
+        self.state.show_status("Épí­tés Mód")
+        self.audio.stop_sfx("step")
+
+    def _save_file(self):
+        """Save bridge design to file."""
+        success, msg = Serializer.save_as(self.bridge)
+        if success:
+            self.state.show_status(msg)
+        else:
+            self.state.show_error(msg)
+
+    def _load_file(self):
+        """Load bridge design from file."""
+        success, msg = Serializer.open_file(self.bridge)
+        if success:
+            self.state.show_status(msg)
+            self.graph.reset_data()
+        else:
+            self.state.show_error(msg)
 
     def update(self, dt):
-        if self.message_timer > 0:
-            self.message_timer -= 1
-            if self.message_timer == 0:
-                self.error_message = None
-                self.status_message = None
-        
+        """Update game state and physics."""
+        self.state.update(dt)
         self.prop_menu.update()
-
-        max_force_val = 0.0
-        max_perc = 0.0
         
-        if self.mode == "ANALYSIS" and self.static_solver:
-            if self.simulation_frozen:
-                return
+        if self.state.can_simulate:
+            self._update_simulation(dt)
 
-            self.ghost_agent.mass = MaterialManager.AGENT["mass"]
-            disps = self.static_solver.displacements
+    def _update_simulation(self, dt):
+        """Update physics simulation and check for failures."""
+        solver = self.state.static_solver
+        
+        # Update agent mass from settings
+        self.ghost_agent.mass = MaterialManager.AGENT["mass"]
+        
+        # Get current displacements and exaggeration
+        displacements = solver.displacements
+        exaggeration = self.graph.sim_settings["exaggeration"]
+        
+        # Update agent position
+        load_info = self.ghost_agent.update_static(
+            dt, self.bridge.beams, displacements, exaggeration
+        )
+        
+        # Prepare loads for solver
+        solver_loads = {}
+        if load_info and 'beam' in load_info:
+            solver_loads[load_info['beam']] = (load_info['t'], load_info['mass'])
+        
+        # Solve with thermal and point loads
+        delta_T = MaterialManager.SETTINGS["sim_temp"] - MaterialManager.SETTINGS["base_temp"]
+        solver.solve(temperature=delta_T, point_load=solver_loads)
+        
+        # Check for beam failures
+        max_force = 0.0
+        max_percent = 0.0
+        new_break = False
+        
+        for beam in self.bridge.beams:
+            # Calculate total load
+            f_axial = abs(solver.results.get(beam, 0))
+            f_bend = abs(solver.bending_results.get(beam, 0))
+            total_load = f_axial + f_bend
+            max_force = max(max_force, total_load)
             
-            # Use dynamic exaggeration setting
-            current_exag = self.sim_settings["exaggeration"]
-
-            # 1. Update Agent using Delta Time
-            load_info = self.ghost_agent.update_static(dt, self.bridge.beams, disps, current_exag)
+            # Check stress ratio
+            ratio = solver.stress_ratios.get(beam, 0)
+            percent = ratio * 100.0
+            max_percent = max(max_percent, percent)
             
-            # 2. Prepare Load Dictionary for Solver {Beam: (t, mass)}
-            solver_loads = {}
-            if load_info and 'beam' in load_info:
-                solver_loads[load_info['beam']] = (load_info['t'], load_info['mass'])
-
-            # 3. Solve with new loads
-            delta_T = MaterialManager.SETTINGS["sim_temp"] - MaterialManager.SETTINGS["base_temp"]
-            self.static_solver.solve(temperature=delta_T, point_load=solver_loads)
-            
-            new_break = False
-            for beam in self.bridge.beams:
-                f_axial = abs(self.static_solver.results.get(beam, 0))
-                f_bend = abs(self.static_solver.bending_results.get(beam, 0))
-                total_load_N = f_axial + f_bend
-                if total_load_N > max_force_val: max_force_val = total_load_N
-                
-                ratio = self.static_solver.stress_ratios.get(beam, 0)
-                pct = ratio * 100.0
-                if pct > max_perc: max_perc = pct
-                
-                if ratio >= 1.0: 
-                    if beam not in self.broken_beams:
-                        self.broken_beams.add(beam)
-                        new_break = True
-            
-            if new_break:
-                self.simulation_frozen = True
-                self.show_error("HÍDSZAKADÁS! (Szimuláció Megállítva)")
-                self.audio.play_sfx("wood_break")
-                self.audio.stop_sfx("step")
-            
-            self.graph.update(max_force_val, max_perc, "ANALYSIS")
-        else:
-            self.graph.update(0, 0, "BUILD")
-
-        if self.vol_timer > 0: self.vol_timer -= 1
-
-    def draw_ixchel(self, surface, screen_x, screen_y):
-        pygame.draw.rect(surface, (139, 69, 19), (screen_x - 5, screen_y - 25, 10, 20)) 
-        pygame.draw.circle(surface, (210, 180, 140), (screen_x, screen_y - 32), 8)
-        pygame.draw.aaline(surface, (100, 70, 40), (screen_x - 12, screen_y - 42), (screen_x + 12, screen_y - 42))
+            # Detect failure
+            if ratio >= 1.0 and beam not in self.state.broken_beams:
+                self.state.broken_beams.add(beam)
+                new_break = True
+        
+        # Handle beam break
+        if new_break:
+            self.state.freeze_simulation()
+            self.state.show_error("ELTÖRT! (Szimuláció Megállítva)")
+            self.audio.play_sfx("wood_break")
+            self.audio.stop_sfx("step")
+        
+        # Update graph
+        self.graph.update(max_force, max_percent, "ANALYSIS")
 
     def draw(self):
+        """Render the current frame."""
         self.grid.draw(self.screen)
         
-        if self.mode == "BUILD":
-            self.editor.draw(self.screen)
-            self.draw_hud()
-            
-            if self.editor.arch_mode:
-                msg = "ÍV ESZKÖZ (ARCH TOOL): BEKAPCSOLVA"
-                hint = "1. Húzás: Szélesség | 2. Egér: Magasság"
-                
-                font_bg = pygame.font.SysFont("arial", 16, bold=True)
-                t1 = font_bg.render(msg, True, (255, 200, 50))
-                t2 = font_bg.render(hint, True, (200, 200, 200))
-                
-                self.screen.blit(t1, (20, 50))
-                self.screen.blit(t2, (20, 75))
-            
-        elif self.mode == "ANALYSIS":
-            self.draw_analysis_results()
-            if self.ghost_agent.active:
-                sx, sy = self.grid.world_to_screen(self.ghost_agent.x, self.ghost_agent.y)
-                self.draw_ixchel(self.screen, sx, sy)
-            self.draw_analysis_legend()
-
+        if self.state.is_build_mode:
+            self._draw_build_mode()
+        else:
+            self._draw_analysis_mode()
+        
+        # Common UI
         self.toolbar.draw(self.screen)
         self.graph.draw(self.screen)
         self.prop_menu.draw(self.screen)
         
-        msg_text = None
-        msg_color = COLOR_TEXT_MAIN
-        if self.error_message:
-            msg_text = self.error_message
-            msg_color = (255, 80, 80)
-        elif self.status_message:
-            msg_text = self.status_message
-            msg_color = (100, 255, 100)
-            
-        if msg_text:
-            text = self.large_font.render(msg_text, True, msg_color)
-            bg = pygame.Surface((text.get_width()+40, text.get_height()+20))
-            bg.set_alpha(200)
-            bg.fill((20, 20, 20))
-            
-            rect = text.get_rect(center=(self.screen.get_width()//2, 100))
-            bg_rect = bg.get_rect(center=(self.screen.get_width()//2, 100))
-            
-            pygame.draw.rect(self.screen, COLOR_UI_BORDER, bg_rect, 2, border_radius=10)
-            self.screen.blit(bg, bg_rect)
-            self.screen.blit(text, rect)
+        # Messages
+        self._draw_messages()
         
-        if self.mode == "BUILD":
-            help_str = "SPACE: Szimuláció | M: Menü | A: Ív Eszköz (Be/Ki) | G: Grafikon"
-            help_txt = self.font.render(help_str, True, (80, 90, 80))
-            self.screen.blit(help_txt, (self.screen.get_width() - help_txt.get_width() - 20, 20))
+        # Volume popup
+        self.volume_popup.draw(
+            self.screen,
+            self.state.volume_display_value,
+            self.state.volume_timer
+        )
         
-        self.draw_volume_popup()
         pygame.display.flip()
 
-    def draw_analysis_legend(self):
-        box_w, box_h = 220, 100
-        x = 20
-        # Moved UP by setting Y to h - 480 (previously 420, so 60px higher)
-        y = self.screen.get_height() - 480 
+    def _draw_build_mode(self):
+        """Draw build mode view."""
+        self.editor.draw(self.screen)
+        self._draw_build_hud()
         
-        s = pygame.Surface((box_w, box_h))
-        s.set_alpha(230)
-        s.fill((30, 35, 30))
-        self.screen.blit(s, (x, y))
-        pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, box_w, box_h), 2)
+        # Arch mode instructions
+        if self.editor.arch_mode:
+            self._draw_arch_instructions()
+
+    def _draw_analysis_mode(self):
+        """Draw analysis mode view."""
+        # Render deformed structure
+        self.analysis_renderer.draw(
+            self.screen,
+            self.bridge,
+            self.state.static_solver,
+            self.state.broken_beams,
+            self.graph.sim_settings["exaggeration"]
+        )
         
+        # Draw agent
+        if self.ghost_agent.active:
+            from ui.renderers import draw_ixchel
+            sx, sy = self.grid.world_to_screen(
+                self.ghost_agent.x,
+                self.ghost_agent.y
+            )
+            draw_ixchel(self.screen, sx, sy)
+        
+        # Legend
+        self._draw_legend()
+
+    def _draw_build_hud(self):
+        """Draw build mode HUD (node/beam count, shortcuts)."""
+        # Stats
+        info = f"CsomÓpontok: {len(self.bridge.nodes)} | Elemek: {len(self.bridge.beams)}"
+        text = self.fonts['normal'].render(info, True, COLOR_AXIS)
+        self.screen.blit(text, (20, 20))
+        
+        # Help text
+        help_str = "SPACE: SzimuláciÓ | M: MenÜ | A: ív Eszköz (Be/Ki) | G: Grafikon"
+        help_txt = self.fonts['normal'].render(help_str, True, (80, 90, 80))
+        w = self.screen.get_width()
+        self.screen.blit(help_txt, (w - help_txt.get_width() - 20, 20))
+
+    def _draw_arch_instructions(self):
+        """Draw arch tool instructions."""
+        msg = "ÍV ESZKÖZ (ARCH TOOL): BEKAPCSOLVA"
+        hint = "1. Húzás: Szélesség | 2. Egér: Magasság"
+        
+        t1 = self.fonts['normal'].render(msg, True, (255, 200, 50))
+        t2 = self.fonts['normal'].render(hint, True, (200, 200, 200))
+        
+        self.screen.blit(t1, (20, 50))
+        self.screen.blit(t2, (20, 75))
+
+    def _draw_legend(self):
+        """Draw legend for analysis visualization."""
+        from utils.render_utils import create_semi_transparent_surface
+        
+        x, y = 20, self.screen.get_height() - 480
+        w, h = 220, 100
+        
+        # Background
+        bg = create_semi_transparent_surface(w, h, (30, 35, 30), 230)
+        self.screen.blit(bg, (x, y))
+        pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, w, h), 2)
+        
+        # Title
         font = pygame.font.SysFont("arial", 14, bold=True)
         title = font.render("Jelmagyarázat", True, COLOR_TEXT_HIGHLIGHT)
         self.screen.blit(title, (x + 10, y + 10))
         
+        # Legend items
         pygame.draw.rect(self.screen, COLOR_COMPRESSION, (x + 10, y + 35, 20, 20))
         lbl_c = font.render("Nyomás (Compression)", True, (200, 200, 200))
         self.screen.blit(lbl_c, (x + 40, y + 35))
-
+        
         pygame.draw.rect(self.screen, COLOR_TENSION, (x + 10, y + 65, 20, 20))
         lbl_t = font.render("Húzás (Tension)", True, (200, 200, 200))
         self.screen.blit(lbl_t, (x + 40, y + 65))
 
-    def draw_analysis_results(self):
-         if not self.static_solver: return
-         
-         view_mode = self.prop_menu.view_mode 
-         text_mode = self.prop_menu.text_mode
-         
-         # Use dynamic exaggeration
-         current_exag = self.sim_settings["exaggeration"]
-
-         for node in self.bridge.nodes:
-            dx, dy, _ = self.static_solver.displacements.get(node, (0,0,0))
-            def_x = node.x + dx * current_exag
-            def_y = node.y + dy * current_exag
-            pos = self.grid.world_to_screen(def_x, def_y)
-            color = (180, 50, 50) if node.fixed else (80, 80, 80)
-            pygame.draw.circle(self.screen, color, pos, 5)
-
-         for beam, force in self.static_solver.results.items():
-            da_x, da_y, da_theta = self.static_solver.displacements.get(beam.node_a, (0,0,0))
-            db_x, db_y, db_theta = self.static_solver.displacements.get(beam.node_b, (0,0,0))
-            
-            p1_x = beam.node_a.x + da_x * current_exag
-            p1_y = beam.node_a.y + da_y * current_exag
-            p2_x = beam.node_b.x + db_x * current_exag
-            p2_y = beam.node_b.y + db_y * current_exag
-            
-            chord_dx = p2_x - p1_x
-            chord_dy = p2_y - p1_y
-            L_deformed = math.hypot(chord_dx, chord_dy)
-            psi = math.atan2(chord_dy, chord_dx)
-            
-            orig_dx = beam.node_b.x - beam.node_a.x
-            orig_dy = beam.node_b.y - beam.node_a.y
-            alpha = math.atan2(orig_dy, orig_dx)
-            
-            rot1 = (alpha + da_theta * current_exag) - psi
-            rot2 = (alpha + db_theta * current_exag) - psi
-
-            while rot1 > math.pi: rot1 -= 2 * math.pi
-            while rot1 < -math.pi: rot1 += 2 * math.pi
-            while rot2 > math.pi: rot2 -= 2 * math.pi
-            while rot2 < -math.pi: rot2 += 2 * math.pi
-            
-            points = []
-            segments = 12 
-            for i in range(segments + 1):
-                s = i / segments 
-                h1 = s**3 - 2*s**2 + s
-                h2 = s**3 - s**2
-                v = L_deformed * (h1 * rot1 + h2 * rot2)
-                u = s * L_deformed 
-                cp = math.cos(psi)
-                sp = math.sin(psi)
-                wx = p1_x + u*cp - v*sp
-                wy = p1_y + u*sp + v*cp
-                points.append(self.grid.world_to_screen(wx, wy))
-
-            color = (100, 100, 100)
-            
-            props = MaterialManager.get_properties(beam.type)
-            width = max(2, int(props['thickness'] * PPM))
-            mat_settings = MaterialManager.MATERIALS.get(beam.type, {})
-            hollow_ratio = mat_settings.get("hollow_ratio", 0.0)
-            ratio = self.static_solver.stress_ratios.get(beam, 0.0)
-            
-            if beam in self.broken_beams:
-                 if len(points) > 1:
-                    for i in range(len(points) - 1):
-                        p_start = points[i]
-                        p_end = points[i+1]
-                        seg_color = (255, 0, 0) if (i % 2 == 0) else (0, 0, 0)
-                        pygame.draw.line(self.screen, seg_color, p_start, p_end, width)
-            else:
-                if view_mode == 0: 
-                    if force < 0: color = COLOR_COMPRESSION 
-                    else:         color = COLOR_TENSION
-                elif view_mode == 1: 
-                    color = beam.color
-                elif view_mode == 2: 
-                    base_c = beam.color
-                    target_c = (255, 50, 50)
-                    t = min(1.0, ratio) 
-                    r = int(base_c[0] + (target_c[0] - base_c[0]) * t)
-                    g = int(base_c[1] + (target_c[1] - base_c[1]) * t)
-                    b = int(base_c[2] + (target_c[2] - base_c[2]) * t)
-                    color = (r, g, b)
-
-                if len(points) > 1:
-                    pygame.draw.lines(self.screen, color, False, points, width)
-            
-            if hollow_ratio > 0.01 and len(points) > 1:
-                 border_px = max(2, int(width * 0.15)) 
-                 inner_w = max(0, width - (border_px * 2))
-                 if inner_w > 0:
-                     pygame.draw.lines(self.screen, (255,255,255), False, points, inner_w)
-
-            if text_mode != 2: 
-                mid_idx = segments // 2
-                mx, my = points[mid_idx]
-                label = ""
-                if text_mode == 0: 
-                    bend = abs(self.static_solver.bending_results.get(beam, 0))
-                    label = f"{int(abs(force))}N | {int(bend)}N"
-                elif text_mode == 1: 
-                    label = f"{int(ratio * 100)}%"
-                    
-                text = self.font.render(label, True, (255, 255, 255))
-                bg_rect = text.get_rect(center=(mx, my))
-                bg_rect.inflate_ip(8, 4)
-                pygame.draw.rect(self.screen, (20, 20, 20), bg_rect, border_radius=4)
-                pygame.draw.rect(self.screen, color, bg_rect, 1, border_radius=4)
-                self.screen.blit(text, text.get_rect(center=(mx, my)))
-
-    def draw_hud(self):
-        info = f"Csomópontok: {len(self.bridge.nodes)} | Elemek: {len(self.bridge.beams)}"
-        text = self.font.render(info, True, COLOR_AXIS)
-        self.screen.blit(text, (20, 20))
-
-    def draw_volume_popup(self):
-            if self.vol_timer <= 0: return
-            w, h = self.screen.get_size()
-            box_w, box_h = 220, 60
-            margin = 30
-            x = w - box_w - margin
-            y = h - box_h - margin
-            
-            alpha = 230
-            if self.vol_timer < 20: alpha = int(230 * (self.vol_timer / 20))
-            
-            s = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
-            pygame.draw.rect(s, (30, 35, 30, alpha), (0,0,box_w,box_h), border_radius=10)
-            pygame.draw.rect(s, (*COLOR_UI_BORDER, alpha), (0,0,box_w,box_h), 2, border_radius=10)
-            
-            bar_w = 180
-            bar_h = 8
-            bx = (box_w - bar_w)//2
-            by = 35
-            
-            pygame.draw.rect(s, (50, 60, 50, alpha), (bx, by, bar_w, bar_h), border_radius=4)
-            cw = int(bar_w * self.vol_display_val)
-            if cw > 0:
-                pygame.draw.rect(s, (100, 200, 255, alpha), (bx, by, cw, bar_h), border_radius=4)
-
-            txt = self.font.render(f"Hangerő: {int(self.vol_display_val * 100)}%", True, COLOR_TEXT_MAIN)
-            txt.set_alpha(alpha)
-            s.blit(txt, (box_w//2 - txt.get_width()//2, 10))
-            self.screen.blit(s, (x, y))
+    def _draw_messages(self):
+        """Draw status/error messages."""
+        if self.state.error_message:
+            msg = self.state.error_message
+            color = (255, 80, 80)
+        elif self.state.status_message:
+            msg = self.state.status_message
+            color = (100, 255, 100)
+        else:
+            return
+        
+        from utils.render_utils import draw_text_with_background, create_semi_transparent_surface
+        
+        text = self.fonts['large'].render(msg, True, color)
+        w = self.screen.get_width()
+        
+        # Create background
+        bg = create_semi_transparent_surface(
+            text.get_width() + 40,
+            text.get_height() + 20,
+            (20, 20, 20), 200
+        )
+        
+        # Center at top
+        pos = (w // 2, 100)
+        text_rect = text.get_rect(center=pos)
+        bg_rect = bg.get_rect(center=pos)
+        
+        pygame.draw.rect(self.screen, COLOR_UI_BORDER, bg_rect, 2, border_radius=10)
+        self.screen.blit(bg, bg_rect)
+        self.screen.blit(text, text_rect)
 
     def quit(self):
+        """Clean shutdown."""
         pygame.quit()
         sys.exit()
 
-    def run(self):
-        while True:
-            # Delta Time calculation
-            dt = self.clock.tick(FPS) / 1000.0
-            
-            # Clamp DT to prevent physics explosion on lag
-            if dt > 0.1: dt = 0.1
-            
-            self.handle_input()
-            self.update(dt) # Pass DT
-            self.draw()
 
 if __name__ == "__main__":
     app = BridgeBuilderApp()
