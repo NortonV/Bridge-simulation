@@ -1,3 +1,2 @@
--Ixchel weight should go down till 0, fix m^3 visual bug, spaghetti doesn't have some sliders (szakítószilárdság, sűrűség is needed)
 -More default bridges
 -Background by gergő
