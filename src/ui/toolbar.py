@@ -31,20 +31,23 @@ class Toolbar:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = pygame.mouse.get_pos()
             # Check clicks (Bottom of screen)
-            y_start = self.screen_h - 60
+            # New height 75 + margin 15 = 90
+            y_start = self.screen_h - 90
             if my > y_start:
-                icon_w = 60
+                icon_w = 90 # Increased from 60
                 total_w = len(self.tools) * icon_w
                 start_x = (self.screen_w - total_w) // 2
                 
-                idx = (mx - start_x) // icon_w
-                if 0 <= idx < len(self.tools):
-                    self.active_index = int(idx)
+                if start_x <= mx <= start_x + total_w:
+                    idx = (mx - start_x) // icon_w
+                    if 0 <= idx < len(self.tools):
+                        self.active_index = int(idx)
 
     def draw(self, surface):
-        icon_w = 60
-        icon_h = 50
-        y = self.screen_h - 60
+        # Increased dimensions by 50% (was 60x50)
+        icon_w = 90
+        icon_h = 75
+        y = self.screen_h - 90
         
         total_w = len(self.tools) * icon_w
         start_x = (self.screen_w - total_w) // 2
@@ -54,8 +57,9 @@ class Toolbar:
         pygame.draw.rect(surface, (30, 35, 40), bg_rect, border_radius=10)
         pygame.draw.rect(surface, (60, 70, 80), bg_rect, 2, border_radius=10)
         
-        font = pygame.font.SysFont("arial", 12, bold=True)
-        key_font = pygame.font.SysFont("arial", 10)
+        # Increased font size for readability
+        font = pygame.font.SysFont("arial", 14, bold=True)
+        key_font = pygame.font.SysFont("arial", 12)
 
         for i, tool in enumerate(self.tools):
             x = start_x + i * icon_w
@@ -70,12 +74,12 @@ class Toolbar:
             
             # Color indicator
             color = tool["color"]
-            pygame.draw.circle(surface, color, (rect.centerx, rect.centery - 5), 8)
+            pygame.draw.circle(surface, color, (rect.centerx, rect.centery - 10), 10)
             
-            # Label
-            lbl = font.render(tool["name"][:3], True, (200, 200, 200))
-            surface.blit(lbl, (rect.centerx - lbl.get_width()//2, rect.centery + 5))
+            # Label - Full name (removed slice [:3])
+            lbl = font.render(tool["name"], True, (200, 200, 200))
+            surface.blit(lbl, (rect.centerx - lbl.get_width()//2, rect.centery + 10))
             
             # Key hint
             k_txt = key_font.render(tool["key"], True, (150, 150, 150))
-            surface.blit(k_txt, (rect.right - 10, rect.top + 2))
+            surface.blit(k_txt, (rect.right - 12, rect.top + 4))

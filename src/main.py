@@ -32,7 +32,14 @@ class BridgeBuilderApp:
         self.grid = Grid(w, h)
         self.bridge = Bridge()
         self.toolbar = Toolbar(w, h)
-        self.graph = GraphOverlay(20, h - 300, 300, 150)
+        
+        # Dynamic settings for simulation
+        self.sim_settings = {
+            "exaggeration": 100.0 
+        }
+        
+        # Pass settings to GraphOverlay
+        self.graph = GraphOverlay(20, h - 350, 400, 200, self.sim_settings)
         self.prop_menu = PropertyMenu(w, h)
         
         self.mode = "BUILD"
@@ -89,6 +96,11 @@ class BridgeBuilderApp:
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT: self.quit()
+            
+            # Handle Graph/Slider Input
+            if self.mode == "ANALYSIS":
+                self.graph.handle_input(event)
+
             if self.prop_menu.handle_input(event):
                 if self.prop_menu.should_quit:
                     self.quit()
@@ -215,9 +227,11 @@ class BridgeBuilderApp:
             self.ghost_agent.mass = MaterialManager.AGENT["mass"]
             disps = self.static_solver.displacements
             
+            # Use dynamic exaggeration setting
+            current_exag = self.sim_settings["exaggeration"]
+
             # 1. Update Agent using Delta Time
-            # We pass 'dt' instead of fixed 1/60
-            load_info = self.ghost_agent.update_static(dt, self.bridge.beams, disps, EXAGGERATION)
+            load_info = self.ghost_agent.update_static(dt, self.bridge.beams, disps, current_exag)
             
             # 2. Prepare Load Dictionary for Solver {Beam: (t, mass)}
             solver_loads = {}
@@ -257,10 +271,8 @@ class BridgeBuilderApp:
         if self.vol_timer > 0: self.vol_timer -= 1
 
     def draw_ixchel(self, surface, screen_x, screen_y):
-        # Draw with offsets to center visuals better
         pygame.draw.rect(surface, (139, 69, 19), (screen_x - 5, screen_y - 25, 10, 20)) 
         pygame.draw.circle(surface, (210, 180, 140), (screen_x, screen_y - 32), 8)
-        # Antialias drawing for smoother look
         pygame.draw.aaline(surface, (100, 70, 40), (screen_x - 12, screen_y - 42), (screen_x + 12, screen_y - 42))
 
     def draw(self):
@@ -322,12 +334,11 @@ class BridgeBuilderApp:
         self.draw_volume_popup()
         pygame.display.flip()
 
-    # ... (draw_analysis_legend and draw_analysis_results remain mostly same, 
-    # but analysis results will benefit from higher PPM automatically) ...
     def draw_analysis_legend(self):
         box_w, box_h = 220, 100
         x = 20
-        y = self.screen.get_height() - 420 
+        # Moved UP by setting Y to h - 480 (previously 420, so 60px higher)
+        y = self.screen.get_height() - 480 
         
         s = pygame.Surface((box_w, box_h))
         s.set_alpha(230)
@@ -353,10 +364,13 @@ class BridgeBuilderApp:
          view_mode = self.prop_menu.view_mode 
          text_mode = self.prop_menu.text_mode
          
+         # Use dynamic exaggeration
+         current_exag = self.sim_settings["exaggeration"]
+
          for node in self.bridge.nodes:
             dx, dy, _ = self.static_solver.displacements.get(node, (0,0,0))
-            def_x = node.x + dx * EXAGGERATION
-            def_y = node.y + dy * EXAGGERATION
+            def_x = node.x + dx * current_exag
+            def_y = node.y + dy * current_exag
             pos = self.grid.world_to_screen(def_x, def_y)
             color = (180, 50, 50) if node.fixed else (80, 80, 80)
             pygame.draw.circle(self.screen, color, pos, 5)
@@ -365,10 +379,10 @@ class BridgeBuilderApp:
             da_x, da_y, da_theta = self.static_solver.displacements.get(beam.node_a, (0,0,0))
             db_x, db_y, db_theta = self.static_solver.displacements.get(beam.node_b, (0,0,0))
             
-            p1_x = beam.node_a.x + da_x * EXAGGERATION
-            p1_y = beam.node_a.y + da_y * EXAGGERATION
-            p2_x = beam.node_b.x + db_x * EXAGGERATION
-            p2_y = beam.node_b.y + db_y * EXAGGERATION
+            p1_x = beam.node_a.x + da_x * current_exag
+            p1_y = beam.node_a.y + da_y * current_exag
+            p2_x = beam.node_b.x + db_x * current_exag
+            p2_y = beam.node_b.y + db_y * current_exag
             
             chord_dx = p2_x - p1_x
             chord_dy = p2_y - p1_y
@@ -379,11 +393,9 @@ class BridgeBuilderApp:
             orig_dy = beam.node_b.y - beam.node_a.y
             alpha = math.atan2(orig_dy, orig_dx)
             
-            rot1 = (alpha + da_theta * EXAGGERATION) - psi
-            rot2 = (alpha + db_theta * EXAGGERATION) - psi
+            rot1 = (alpha + da_theta * current_exag) - psi
+            rot2 = (alpha + db_theta * current_exag) - psi
 
-            # --- FIX: Normalize angles to range (-PI, PI) ---
-            # This prevents R->L beams from flipping 360 degrees when sagging
             while rot1 > math.pi: rot1 -= 2 * math.pi
             while rot1 < -math.pi: rot1 += 2 * math.pi
             while rot2 > math.pi: rot2 -= 2 * math.pi
@@ -437,8 +449,7 @@ class BridgeBuilderApp:
                     pygame.draw.lines(self.screen, color, False, points, width)
             
             if hollow_ratio > 0.01 and len(points) > 1:
-                 # FIX for Hollow: Ensure a border is visible
-                 border_px = max(2, int(width * 0.15)) # 2px min border
+                 border_px = max(2, int(width * 0.15)) 
                  inner_w = max(0, width - (border_px * 2))
                  if inner_w > 0:
                      pygame.draw.lines(self.screen, (255,255,255), False, points, inner_w)
