@@ -49,6 +49,10 @@ class StaticSolver:
             dx = beam.node_b.x - beam.node_a.x
             dy = beam.node_b.y - beam.node_a.y
             L = math.sqrt(dx*dx + dy*dy)
+
+            if L < 1e-6:
+                print(f"Warning: Skipping zero-length beam at ({beam.node_a.x}, {beam.node_a.y})")
+                continue
             
             c = dx / L
             s = dy / L

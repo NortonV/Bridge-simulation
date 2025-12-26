@@ -25,6 +25,8 @@ class Editor:
     MERGE_THRESHOLD = 0.4
     # Beam selection threshold (meters)
     BEAM_SELECT_THRESHOLD = 0.5
+    # Arch tool height sensitivity (Higher = more responsive vertical movement)
+    ARCH_SENSITIVITY = 2.0
     
     def __init__(self, grid, bridge, toolbar, audio_manager):
         self.grid = grid
@@ -295,6 +297,8 @@ class Editor:
         """
         p0 = (self.start_node.x, self.start_node.y)
         p2 = (self.arch_end_node.x, self.arch_end_node.y)
+        mid_y = (p0[1] + p2[1]) / 2
+        cy = mid_y + (cy - mid_y) * self.ARCH_SENSITIVITY
         p1 = (cx, cy)
         
         segments = 8
@@ -316,6 +320,16 @@ class Editor:
                 current_node = self.arch_end_node
             else:
                 current_node = self.bridge.add_node(bx, by, fixed=(by <= 0))
+
+            # Skip if nodes are the same or at same position (prevents zero-length beams)
+            if current_node != prev_node:
+                dx = current_node.x - prev_node.x
+                dy = current_node.y - prev_node.y
+                if math.hypot(dx, dy) > 0.01:  # Only create beam if length > 1cm
+                    self.bridge.add_beam(prev_node, current_node, mat_type)
+                    prev_node = current_node
+                # If too close, skip this node and keep prev_node as-is
+            # If same node, skip and keep prev_node as-is
             
             self.bridge.add_beam(prev_node, current_node, mat_type)
             prev_node = current_node
@@ -384,9 +398,12 @@ class Editor:
         """Draw curved arch preview."""
         s_pos = self.grid.world_to_screen(self.start_node.x, self.start_node.y)
         e_pos = self.grid.world_to_screen(self.arch_end_node.x, self.arch_end_node.y)
+
+        mid_y_screen = (s_pos[1] + e_pos[1]) / 2
+        target_my = mid_y_screen + (my - mid_y_screen) * self.ARCH_SENSITIVITY
         
         # Generate curve points
-        points = quadratic_bezier_points(s_pos, (mx, my), e_pos, 21)
+        points = quadratic_bezier_points(s_pos, (mx, target_my), e_pos, 21)
         
         # Draw curve and endpoints
         pygame.draw.lines(surface, color, False, points, 2)

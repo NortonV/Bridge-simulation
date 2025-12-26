@@ -419,12 +419,12 @@ class BridgeBuilderApp:
     def _draw_build_hud(self):
         """Draw build mode HUD (node/beam count, shortcuts)."""
         # Stats
-        info = f"CsomÓpontok: {len(self.bridge.nodes)} | Elemek: {len(self.bridge.beams)}"
+        info = f"Csomópontok: {len(self.bridge.nodes)} | Elemek: {len(self.bridge.beams)}"
         text = self.fonts['normal'].render(info, True, COLOR_AXIS)
         self.screen.blit(text, (20, 20))
         
         # Help text
-        help_str = "SPACE: SzimuláciÓ | M: MenÜ | A: ív Eszköz (Be/Ki) | G: Grafikon"
+        help_str = "SPACE: Szimuláció | M: Menü | A: ív Eszköz (Be/Ki) | G: Grafikon"
         help_txt = self.fonts['normal'].render(help_str, True, (80, 90, 80))
         w = self.screen.get_width()
         self.screen.blit(help_txt, (w - help_txt.get_width() - 20, 20))

@@ -209,6 +209,15 @@ class Bridge:
         return [new_b] if new_b else []
 
     def add_beam_direct(self, node_a, node_b, material_type):
+        # Reject zero-length beams (same node or same position)
+        if node_a == node_b:
+            return None
+        
+        dx = node_b.x - node_a.x
+        dy = node_b.y - node_a.y
+        if math.hypot(dx, dy) < 0.01:  # Less than 1cm
+            return None
+        
         # Check for duplicates
         for b in self.beams:
             if (b.node_a == node_a and b.node_b == node_b) or \

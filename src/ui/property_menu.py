@@ -215,21 +215,23 @@ class PropertyMenu:
         material_configs = [
             ("wood", "Fa", [
                 ("Rugalmasság (E)", "Pa", "E", 20.0),
-                ("Sűrűség", "kg/mÂ³", "density", 10.0),
+                ("Sűrűség", "kg/m³", "density", 10.0),
                 ("Szakítószilárdság", "Pa", "strength", 20.0),
             ]),
             ("bamboo", "Bambusz", [
                 ("Rugalmasság", "Pa", "E", 20.0),
-                ("Sűrűség", "kg/mÂ³", "density", 10.0),
+                ("Sűrűség", "kg/m³", "density", 10.0),
                 ("Szakítószilárdság", "Pa", "strength", 20.0),
             ]),
             ("steel", "Acél", [
                 ("Rugalmasság", "Pa", "E", 20.0),
-                ("Sűrűség", "kg/mÂ³", "density", 10.0),
+                ("Sűrűség", "kg/m³", "density", 10.0),
                 ("Szakítószilárdság", "Pa", "strength", 20.0),
             ]),
             ("spaghetti", "Spagetti", [
-                ("Rugalmasság", "Pa", "E", 20.0),
+                ("Rugalmasság (E)", "Pa", "E", 20.0),
+                ("Sűrűség", "kg/m³", "density", 10.0),
+                ("Szakítószilárdság", "Pa", "strength", 20.0),
             ]),
         ]
         
@@ -247,17 +249,16 @@ class PropertyMenu:
                        MaterialManager.MATERIALS[mat_key], "thickness", is_log=True)
             )
             
-            # Add hollow ratio slider (except spaghetti and steel)
-            if mat_key not in ["spaghetti", "steel"]:
-                label = f"{mat_name} Üregesség"
-                self.sliders.append(
-                    Slider(label, "%", 0.0, 0.99,
-                           MaterialManager.MATERIALS[mat_key], "hollow_ratio")
-                )
+            # Add hollowness slider
+            label = f"{mat_name} Üregesség"
+            self.sliders.append(
+                Slider(label, "%", 0.0, 0.99,
+                        MaterialManager.MATERIALS[mat_key], "hollow_ratio")
+            )
         
         # Global settings
         self.temp_slider = Slider(
-            "Alap Hőm.", "Â°C", 0.0, 50.0,
+            "Alap Hőm.", "°C", 0.0, 50.0,
             MaterialManager.SETTINGS, "base_temp"
         )
         self.sliders.append(self.temp_slider)
@@ -265,7 +266,7 @@ class PropertyMenu:
         # Agent properties
         d_mass = MaterialManager.AGENT["mass"]
         self.sliders.append(
-            Slider("Ixchel Tömege", "kg", d_mass/20.0, d_mass*20.0,
+            Slider("Ixchel Tömege", "kg", 0.1, 1500,
                    MaterialManager.AGENT, "mass", is_log=True)
         )
         self.sliders.append(

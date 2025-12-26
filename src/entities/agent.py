@@ -66,6 +66,10 @@ class Ixchel:
 
         for beam in beams:
             if beam.type != "wood": continue 
+
+            # Skip zero-length beams
+            if abs(beam.node_b.x - beam.node_a.x) < 0.001 and abs(beam.node_b.y - beam.node_a.y) < 0.001:
+                continue
             
             # --- CALCULATE DEFORMED GEOMETRY ---
             node_a = beam.node_a
