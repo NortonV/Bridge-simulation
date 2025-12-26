@@ -105,15 +105,15 @@ class BridgeBuilderApp:
                     s_str = "BE" if state else "KI"
                     self.show_status(f"Ív Eszköz: {s_str}")
 
-                if event.key == pygame.K_v: 
+                if event.key == pygame.K_v:
                     self.prop_menu.toggle_view_mode()
-                if event.key == pygame.K_t: 
+                if event.key == pygame.K_t:
                     self.prop_menu.toggle_text_mode()
                 
                 if event.key == pygame.K_SPACE:
-                    if self.mode == "BUILD": 
+                    if self.mode == "BUILD":
                         self.run_static_analysis()
-                    elif self.mode == "ANALYSIS": 
+                    elif self.mode == "ANALYSIS":
                         self.stop_analysis()
                     continue
 

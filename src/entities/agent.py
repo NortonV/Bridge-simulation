@@ -1,5 +1,5 @@
 import pygame
-import math # Ensure math is imported
+import math
 from core.constants import *
 from core.material_manager import MaterialManager
 
@@ -9,7 +9,6 @@ class Ixchel:
         self.x = 0
         self.y = 0
         self.velocity_x = 0
-        self.mass = 5.0 
         self.on_ground = False
         
         # Audio

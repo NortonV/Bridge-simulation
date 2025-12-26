@@ -252,7 +252,7 @@ class StaticSolver:
                 
                 # Optional: Keep your instant failure flag if it exceeds 100%
                 if buckling_ratio > 1.0:
-                    final_stress_ratio = 999.0 
+                    final_stress_ratio = 1.0 
 
             # Store the result
             self.results[beam] = axial_force
