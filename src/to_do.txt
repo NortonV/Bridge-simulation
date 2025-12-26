@@ -1,8 +1,6 @@
--euler buckling too abrupt
--Fix sound effects (creaking is weird, some sounds feel delayed, steps should be better, not every material has a sound, etc)
--Add a few default bridges that can be loaded (at least what we will build)
 -Find every bug
--Background by gergő
--Send it over to the bois for beta testing
+-Add a few default bridges that can be loaded (at least what we will build)
 -Refactor the code, add lots of comments, I should understand it all
 -Make it installable
+-Send it over to the bois for beta testing
+-Background by gergő

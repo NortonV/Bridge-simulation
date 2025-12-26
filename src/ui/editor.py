@@ -27,7 +27,7 @@ class Editor:
         self.start_node = None
         return self.arch_mode
 
-    def play_place_sound(self, mat_type):
+    def play_place_sound(self):
         self.audio.play_sfx("wood_place")
 
     def handle_continuous_input(self, world_pos):
@@ -49,15 +49,19 @@ class Editor:
             if self.hover_node and not self.hover_node.fixed:
                 to_remove = [b for b in self.bridge.beams if b.node_a == self.hover_node or b.node_b == self.hover_node]
                 for b in to_remove: 
-                    if b in self.bridge.beams: self.bridge.beams.remove(b)
+                    if b in self.bridge.beams:
+                        self.bridge.beams.remove(b)
+                        self.play_place_sound()
                 if self.hover_node in self.bridge.nodes:
                     self.bridge.nodes.remove(self.hover_node)
+                    self.play_place_sound()
                 self.hover_node = None
                 return
             
             if self.hover_beam:
                 if self.hover_beam in self.bridge.beams:
                     self.bridge.beams.remove(self.hover_beam)
+                    self.play_place_sound()
                 self.hover_beam = None
                 return
 
@@ -103,7 +107,7 @@ class Editor:
                     self.arch_stage = 0
                     self.start_node = None
                     self.arch_end_node = None
-                    self.play_place_sound(tool_type)
+                    self.play_place_sound()
                 
                 elif tool_type == "DELETE":
                     pass
@@ -111,7 +115,7 @@ class Editor:
                     self.start_node = self.hover_node
                 elif self.hover_beam:
                     self.start_node = self.bridge.split_beam(self.hover_beam, wx, wy)
-                    self.play_place_sound(self.hover_beam.type)
+                    self.play_place_sound()
                 else:
                     is_anchor = (wy <= 0)
                     self.start_node = self.bridge.add_node(wx, wy, is_anchor)
@@ -161,7 +165,7 @@ class Editor:
                     if not end_node:
                         if self.hover_beam:
                             end_node = self.bridge.split_beam(self.hover_beam, wx, wy)
-                            self.play_place_sound(self.hover_beam.type)
+                            self.play_place_sound()
                         else:
                             is_anchor = (wy <= 0)
                             end_node = self.bridge.add_node(wx, wy, is_anchor)
@@ -174,7 +178,7 @@ class Editor:
                         else:
                             created = self.bridge.add_beam(self.start_node, end_node, tool_type)
                             if created:
-                                self.play_place_sound(tool_type)
+                                self.play_place_sound()
                 
                 if not (self.arch_mode and self.arch_stage == 1):
                      self.start_node = None

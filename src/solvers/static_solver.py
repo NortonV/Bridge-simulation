@@ -226,23 +226,37 @@ class StaticSolver:
 
             max_moment = max(abs(moment_a), abs(moment_b))
             
-            # Stress Calc
+            # 1. Calculate Standard Stress (Yield/Strength based)
             sigma_axial = axial_force / A
             sigma_bend = max_moment * (props["thickness"]/2) / I
             
             total_stress = abs(sigma_axial) + abs(sigma_bend)
             
-            stress_ratio = total_stress / props["strength"]
+            # Base ratio based on material strength
+            stress_ratio_yield = total_stress / props["strength"]
             
-            # Buckling Check
-            if axial_force < 0:
+            # Initialize final ratio
+            final_stress_ratio = stress_ratio_yield
+
+            # 2. Calculate Buckling Ratio (Stability based)
+            if axial_force < 0: # Compression
                 K = 1.0 
+                # Euler Buckling Formula: P_cr = (pi^2 * E * I) / (K * L)^2
                 P_cr = (math.pi**2 * E * I) / ((K*L)**2)
-                if abs(axial_force) > P_cr:
-                    stress_ratio = 999.0 
-            
+                
+                # Calculate how close we are to buckling (0.0 to 1.0+)
+                buckling_ratio = abs(axial_force) / P_cr
+                
+                # The beam is under load from whichever factor is higher
+                final_stress_ratio = max(stress_ratio_yield, buckling_ratio)
+                
+                # Optional: Keep your instant failure flag if it exceeds 100%
+                if buckling_ratio > 1.0:
+                    final_stress_ratio = 999.0 
+
+            # Store the result
             self.results[beam] = axial_force
             self.bending_results[beam] = max_moment 
-            self.stress_ratios[beam] = stress_ratio
+            self.stress_ratios[beam] = final_stress_ratio # Use the corrected ratio
 
         return True
