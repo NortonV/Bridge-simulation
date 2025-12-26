@@ -1,7 +1,7 @@
--Vines don't work
+-euler buckling too abrupt
 -Fix sound effects (creaking is weird, some sounds feel delayed, steps should be better, not every material has a sound, etc)
--Anti aliasync, hollow has too much hollow
 -Add a few default bridges that can be loaded (at least what we will build)
+-Find every bug
 -Background by gergő
 -Send it over to the bois for beta testing
 -Refactor the code, add lots of comments, I should understand it all

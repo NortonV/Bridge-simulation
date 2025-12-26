@@ -96,12 +96,21 @@ class Ixchel:
             if min_x <= self.x <= max_x:
                 if max_x - min_x < 0.01: continue 
                 
-                # Calculate 't' (0.0 to 1.0) along the chord
-                # Note: This linear t is an approximation for the curve, but sufficient for movement
-                if p2_x > p1_x:
-                    t = (self.x - p1_x) / (p2_x - p1_x)
+
+                beam_dx = p2_x - p1_x
+                beam_dy = p2_y - p1_y
+                beam_len_sq = beam_dx*beam_dx + beam_dy*beam_dy
+                
+                # Vector from Node A to Agent
+                agent_dx = self.x - p1_x
+                agent_dy = self.y - p1_y
+
+                if beam_len_sq > 0.00001:
+                    # Dot Product Projection: (AgentVector . BeamVector) / |BeamVector|^2
+                    dot = agent_dx * beam_dx + agent_dy * beam_dy
+                    t = dot / beam_len_sq
                 else:
-                    t = (self.x - p2_x) / (p1_x - p2_x)
+                    t = 0.5 # Fallback for zero-length beams
                 
                 # --- CUBIC HERMITE SPLINE INTERPOLATION (Matches Renderer) ---
                 if displacements:
@@ -117,6 +126,12 @@ class Ixchel:
                     # Rotations relative to the new chord
                     rot1 = (alpha + da_theta * exaggeration) - psi
                     rot2 = (alpha + db_theta * exaggeration) - psi
+                    
+                    # --- ADD THE SAME FIX HERE ---
+                    while rot1 > math.pi: rot1 -= 2 * math.pi
+                    while rot1 < -math.pi: rot1 += 2 * math.pi
+                    while rot2 > math.pi: rot2 -= 2 * math.pi
+                    while rot2 < -math.pi: rot2 += 2 * math.pi
                     
                     # Shape functions
                     s = t

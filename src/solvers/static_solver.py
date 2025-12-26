@@ -31,12 +31,15 @@ class StaticSolver:
         K_global = np.zeros((dof, dof))
         F_global = np.zeros(dof)
 
+        # Dictionary to store Fixed End Moments (FEM) for post-processing stress
+        # Key: beam, Value: (Moment_at_A, Moment_at_B)
+        beam_fem_loads = {}
+
         # 2. Build Stiffness Matrix
         for beam in beams:
             i = node_map[beam.node_a]
             j = node_map[beam.node_b]
             
-            # FIX: Pass the beam's hollow_ratio to the material manager
             props = MaterialManager.get_properties(beam.type, hollow_ratio=beam.hollow_ratio)
             
             E = props["E"]
@@ -82,7 +85,6 @@ class StaticSolver:
                 therm_strain = alpha * temperature
                 f_therm = -E * A * therm_strain
                 
-                # Local force vector for thermal expansion (Axial only)
                 f_local_therm = np.array([-f_therm, 0, 0, f_therm, 0, 0])
                 f_global_therm = T.T @ f_local_therm
                 
@@ -92,32 +94,60 @@ class StaticSolver:
         # 3. Loads (Gravity + Custom)
         g = 9.81
         for beam in beams:
-            # FIX: Ensure gravity calculation also uses the correct hollow ratio
             props = MaterialManager.get_properties(beam.type, hollow_ratio=beam.hollow_ratio)
             mass = props["area"] * beam.length * props["density"]
             weight = mass * g
             
-            # Split weight to nodes
-            idx_a = node_map[beam.node_a] * 3 + 1
-            idx_b = node_map[beam.node_b] * 3 + 1
-            F_global[idx_a] += weight / 2.0
-            F_global[idx_b] += weight / 2.0
+            # FIX 1: SUBTRACT weight (Gravity acts DOWN, Y is UP)
+            idx_a_y = node_map[beam.node_a] * 3 + 1
+            idx_b_y = node_map[beam.node_b] * 3 + 1
+            F_global[idx_a_y] -= weight / 2.0
+            F_global[idx_b_y] -= weight / 2.0
         
         # Point Load (Agent)
         if point_load:
             # {beam: (t, mass)}
             for beam, (t, mass) in point_load.items():
-                weight = mass * g
+                P = mass * g
+                L = beam.length
                 
-                # Distributed load based on 't'
-                # Simple linear interpolation for nodal loads
-                fa = weight * (1.0 - t)
-                fb = weight * t
+                # Parameters for position
+                a = t * L
+                b = (1.0 - t) * L
                 
-                idx_a = node_map[beam.node_a] * 3 + 1
-                idx_b = node_map[beam.node_b] * 3 + 1
-                F_global[idx_a] += fa
-                F_global[idx_b] += fb
+                # --- FIX 2: Fixed End Moments & Reaction Forces ---
+                # Instead of simple linear interpolation, we use exact beam formulas.
+                # This ensures that even if nodes are FIXED, the load is registered as moments.
+                
+                # Vertical Reaction Forces (Standard Fixed-Fixed Beam formulas)
+                # These act UP on the beam, so equivalent nodal loads act DOWN (-)
+                R_a = (P * b**2 * (3*a + b)) / L**3
+                R_b = (P * a**2 * (a + 3*b)) / L**3
+                
+                # Fixed End Moments (Standard formulas)
+                # Load P is Down.
+                # Reaction at A is CCW (+). Equivalent Load on Node A is CW (-).
+                # Reaction at B is CW (-). Equivalent Load on Node B is CCW (+).
+                M_a = (P * a * b**2) / L**2
+                M_b = (P * a**2 * b) / L**2
+                
+                # Apply to Global Force Vector (Signs inverted for Equivalent Nodal Loads)
+                idx_a = node_map[beam.node_a] * 3
+                idx_b = node_map[beam.node_b] * 3
+                
+                # Vertical Load (Y-axis is index +1)
+                F_global[idx_a + 1] -= R_a
+                F_global[idx_b + 1] -= R_b
+                
+                # Moment Load (Theta-axis is index +2)
+                # Reaction A is CCW (+), so Eq Load is CW (-)
+                F_global[idx_a + 2] -= M_a 
+                # Reaction B is CW (-), so Eq Load is CCW (+)
+                F_global[idx_b + 2] += M_b 
+                
+                # Store these FEMs to add them back during stress calculation
+                # (Superposition: Total Moment = Moment_from_Nodes + Moment_Fixed_End)
+                beam_fem_loads[beam] = (M_a, -M_b) # Store as Internal Moments (Reaction direction)
 
         # 4. Boundary Conditions
         fixed_dofs = []
@@ -134,6 +164,7 @@ class StaticSolver:
         try:
             U_reduced = np.linalg.solve(K_reduced, F_reduced)
         except np.linalg.LinAlgError:
+            self.error_msg = "Instabil: Szinguláris Mátrix"
             return False 
         
         U_global = np.zeros(dof)
@@ -154,7 +185,6 @@ class StaticSolver:
             L = math.sqrt(dx*dx + dy*dy)
             c = dx/L; s = dy/L
             
-            # FIX: Use hollow_ratio in post-processing too
             props = MaterialManager.get_properties(beam.type, hollow_ratio=beam.hollow_ratio)
             E = props["E"]
             A = props["area"]
@@ -173,24 +203,30 @@ class StaticSolver:
             
             # Axial Force (N = AE/L * delta_u_x)
             axial_strain = (u_local[3] - u_local[0]) / L
-            
-            # Thermal correction for stress
             therm_strain = props["alpha"] * temperature
             mech_strain = axial_strain - therm_strain
-            
             axial_force = E * A * mech_strain
             
-            # Bending Moment (Simplified max moment)
+            # Bending Moment (Slope Deflection Equations)
+            # M_ab = 2EI/L * (2*theta_a + theta_b - 3*psi)
             theta_a = u_local[2]
             theta_b = u_local[5]
-            relative_disp = (u_local[4] - u_local[1]) / L
+            relative_disp = (u_local[4] - u_local[1]) / L # psi
             
             moment_a = (2*E*I/L) * (2*theta_a + theta_b - 3*relative_disp)
             moment_b = (2*E*I/L) * (2*theta_b + theta_a - 3*relative_disp)
+            
+            # --- FIX 3: Superposition of Fixed End Moments ---
+            # If there is a point load, we must add the "Local" moments to the "Nodal" moments.
+            # Otherwise, a fixed-fixed beam shows 0 stress.
+            if beam in beam_fem_loads:
+                fem_a, fem_b = beam_fem_loads[beam]
+                moment_a += fem_a
+                moment_b += fem_b
+
             max_moment = max(abs(moment_a), abs(moment_b))
             
             # Stress Calc
-            # sigma = F/A + M*y/I
             sigma_axial = axial_force / A
             sigma_bend = max_moment * (props["thickness"]/2) / I
             
@@ -198,12 +234,12 @@ class StaticSolver:
             
             stress_ratio = total_stress / props["strength"]
             
-            # Buckling Check for Compression (Euler)
+            # Buckling Check
             if axial_force < 0:
-                K = 1.0 # Effective length factor
+                K = 1.0 
                 P_cr = (math.pi**2 * E * I) / ((K*L)**2)
                 if abs(axial_force) > P_cr:
-                    stress_ratio = 999.0 # Instant fail
+                    stress_ratio = 999.0 
             
             self.results[beam] = axial_force
             self.bending_results[beam] = max_moment 

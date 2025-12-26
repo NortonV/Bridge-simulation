@@ -381,6 +381,13 @@ class BridgeBuilderApp:
             
             rot1 = (alpha + da_theta * EXAGGERATION) - psi
             rot2 = (alpha + db_theta * EXAGGERATION) - psi
+
+            # --- FIX: Normalize angles to range (-PI, PI) ---
+            # This prevents R->L beams from flipping 360 degrees when sagging
+            while rot1 > math.pi: rot1 -= 2 * math.pi
+            while rot1 < -math.pi: rot1 += 2 * math.pi
+            while rot2 > math.pi: rot2 -= 2 * math.pi
+            while rot2 < -math.pi: rot2 += 2 * math.pi
             
             points = []
             segments = 12 
