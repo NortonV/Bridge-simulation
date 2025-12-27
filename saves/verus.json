@@ -1,0 +1,493 @@
+{
+    "version": 1.1,
+    "materials": {
+        "wood": {
+            "E": 11000000000.0,
+            "density": 600.0,
+            "strength": 40000000.0,
+            "alpha": 5e-06,
+            "thickness": 0.2,
+            "hollow_ratio": 0.0
+        },
+        "bamboo": {
+            "E": 18000000000.0,
+            "density": 700.0,
+            "strength": 60000000.0,
+            "alpha": 1e-05,
+            "thickness": 0.15,
+            "hollow_ratio": 0.0
+        },
+        "steel": {
+            "E": 200000000000.0,
+            "density": 7850.0,
+            "strength": 250000000.0,
+            "alpha": 1.2e-05,
+            "thickness": 0.05,
+            "hollow_ratio": 0.0
+        },
+        "spaghetti": {
+            "E": 3000000000.0,
+            "density": 1500.0,
+            "strength": 10000000.0,
+            "alpha": 0.0,
+            "thickness": 0.03,
+            "hollow_ratio": 0.0
+        }
+    },
+    "settings": {
+        "base_temp": 25.0,
+        "sim_temp": 25.0
+    },
+    "nodes": [
+        {
+            "x": -15,
+            "y": 10,
+            "fixed": true
+        },
+        {
+            "x": 15,
+            "y": 10,
+            "fixed": true
+        },
+        {
+            "x": -4.5,
+            "y": -0.5,
+            "fixed": true
+        },
+        {
+            "x": -10.0,
+            "y": 15.0,
+            "fixed": false
+        },
+        {
+            "x": 10.0,
+            "y": 15.0,
+            "fixed": false
+        },
+        {
+            "x": 0.5,
+            "y": -1.0,
+            "fixed": true
+        },
+        {
+            "x": -5.0,
+            "y": 10.0,
+            "fixed": false
+        },
+        {
+            "x": 0.0,
+            "y": 15.0,
+            "fixed": false
+        },
+        {
+            "x": 5.0,
+            "y": 10.0,
+            "fixed": false
+        },
+        {
+            "x": 2.5,
+            "y": -0.5,
+            "fixed": true
+        },
+        {
+            "x": -12.5,
+            "y": 12.5,
+            "fixed": false
+        },
+        {
+            "x": 12.5,
+            "y": 12.5,
+            "fixed": false
+        },
+        {
+            "x": -7.5,
+            "y": 12.5,
+            "fixed": false
+        },
+        {
+            "x": -2.5,
+            "y": 12.5,
+            "fixed": false
+        },
+        {
+            "x": 2.5,
+            "y": 12.5,
+            "fixed": false
+        },
+        {
+            "x": 7.5,
+            "y": 12.5,
+            "fixed": false
+        },
+        {
+            "x": 0.0,
+            "y": 5.0,
+            "fixed": false
+        },
+        {
+            "x": -0.5,
+            "y": -1.0,
+            "fixed": true
+        },
+        {
+            "x": -4.5,
+            "y": -1.5,
+            "fixed": true
+        },
+        {
+            "x": 2.0,
+            "y": -1.0,
+            "fixed": true
+        },
+        {
+            "x": 20.0,
+            "y": 0.0,
+            "fixed": true
+        },
+        {
+            "x": -5.0,
+            "y": 0.0,
+            "fixed": true
+        },
+        {
+            "x": 5.0,
+            "y": 0.0,
+            "fixed": true
+        },
+        {
+            "x": -4.0,
+            "y": -1.0,
+            "fixed": true
+        },
+        {
+            "x": -2.5,
+            "y": -1.0,
+            "fixed": true
+        },
+        {
+            "x": -10.0,
+            "y": 10.0,
+            "fixed": false
+        },
+        {
+            "x": -10.0,
+            "y": 5.0,
+            "fixed": false
+        },
+        {
+            "x": -5.0,
+            "y": 5.0,
+            "fixed": false
+        },
+        {
+            "x": -2.0,
+            "y": -0.5,
+            "fixed": true
+        },
+        {
+            "x": 0.0,
+            "y": 10.0,
+            "fixed": false
+        },
+        {
+            "x": 5.0,
+            "y": 5.0,
+            "fixed": false
+        },
+        {
+            "x": 10.0,
+            "y": 10.0,
+            "fixed": false
+        },
+        {
+            "x": 10.0,
+            "y": 5.0,
+            "fixed": false
+        },
+        {
+            "x": -4.5,
+            "y": -1.0,
+            "fixed": true
+        },
+        {
+            "x": 0.0,
+            "y": -1.5,
+            "fixed": true
+        },
+        {
+            "x": -20.0,
+            "y": 0.0,
+            "fixed": true
+        },
+        {
+            "x": 2.0,
+            "y": -1.5,
+            "fixed": true
+        },
+        {
+            "x": -1.5,
+            "y": -1.0,
+            "fixed": true
+        }
+    ],
+    "beams": [
+        {
+            "u": 3,
+            "v": 7,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 7,
+            "v": 4,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 0,
+            "v": 10,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 10,
+            "v": 3,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 4,
+            "v": 11,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 11,
+            "v": 1,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 10,
+            "v": 12,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 6,
+            "v": 13,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 13,
+            "v": 7,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 12,
+            "v": 13,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 7,
+            "v": 14,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 14,
+            "v": 8,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 13,
+            "v": 14,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 8,
+            "v": 15,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 15,
+            "v": 4,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 14,
+            "v": 15,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 15,
+            "v": 11,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 3,
+            "v": 12,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 12,
+            "v": 6,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 1,
+            "v": 20,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 0,
+            "v": 25,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 25,
+            "v": 6,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 0,
+            "v": 26,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 26,
+            "v": 21,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 25,
+            "v": 26,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 6,
+            "v": 27,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 6,
+            "v": 29,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 29,
+            "v": 8,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 8,
+            "v": 31,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 31,
+            "v": 1,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 1,
+            "v": 32,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 32,
+            "v": 22,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 31,
+            "v": 32,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 26,
+            "v": 27,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 27,
+            "v": 16,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 16,
+            "v": 30,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 30,
+            "v": 32,
+            "type": "wood",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 20,
+            "v": 22,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 22,
+            "v": 21,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 21,
+            "v": 35,
+            "type": "steel",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 0,
+            "v": 35,
+            "type": "spaghetti",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 29,
+            "v": 16,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        },
+        {
+            "u": 8,
+            "v": 30,
+            "type": "bamboo",
+            "hollow_ratio": 0.0
+        }
+    ]
+}

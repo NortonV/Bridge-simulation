@@ -1,2 +1,4 @@
+-Üregesség nem megy
+-Red nodes spawning
 -More default bridges
 -Background by gergő
