@@ -190,10 +190,10 @@ class PropertyMenu:
         """Switch temperature slider between base and simulation mode."""
         if enabled:
             self.temp_slider.dict_key = "sim_temp"
-            self.temp_slider.label = "Szim. Hőm."
+            self.temp_slider.label = "Szimulációs Hőmérséklet"
         else:
             self.temp_slider.dict_key = "base_temp"
-            self.temp_slider.label = "Alap Hőm."
+            self.temp_slider.label = "Alap Hőmérséklet"
 
     def _create_centered_log_slider(self, label, unit, mat_key, prop_key, factor=20.0):
         """

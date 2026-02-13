@@ -460,11 +460,11 @@ class BridgeBuilderApp:
         
         # Legend items
         pygame.draw.rect(self.screen, COLOR_COMPRESSION, (x + 10, y + 35, 20, 20))
-        lbl_c = font.render("Nyomás (Compression)", True, (200, 200, 200))
+        lbl_c = font.render("Nyomás", True, (200, 200, 200))
         self.screen.blit(lbl_c, (x + 40, y + 35))
         
         pygame.draw.rect(self.screen, COLOR_TENSION, (x + 10, y + 65, 20, 20))
-        lbl_t = font.render("Húzás (Tension)", True, (200, 200, 200))
+        lbl_t = font.render("Húzás", True, (200, 200, 200))
         self.screen.blit(lbl_t, (x + 40, y + 65))
 
     def _draw_messages(self):

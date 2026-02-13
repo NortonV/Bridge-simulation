@@ -17,7 +17,7 @@ class GraphOverlay:
              # Slider positioned 10px below the graph
              self.slider_rect = pygame.Rect(x, y + height + 20, width, 14)
              # Log scale slider: Min 1, Max 1000, Default 100 is perfectly in middle if Log
-             self.slider = Slider("Torzítás (Exaggeration)", "x", 1.0, 1000.0, self.sim_settings, "exaggeration", is_log=True)
+             self.slider = Slider("Torzítás", "x", 1.0, 1000.0, self.sim_settings, "exaggeration", is_log=True)
 
     def toggle(self):
         self.visible = not self.visible
