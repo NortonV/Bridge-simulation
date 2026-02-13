@@ -330,9 +330,6 @@ class Editor:
                     prev_node = current_node
                 # If too close, skip this node and keep prev_node as-is
             # If same node, skip and keep prev_node as-is
-            
-            self.bridge.add_beam(prev_node, current_node, mat_type)
-            prev_node = current_node
 
     def draw(self, surface):
         """Draw all bridge elements and editor overlays."""

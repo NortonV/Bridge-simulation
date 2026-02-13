@@ -2,6 +2,7 @@
 Property menu for adjusting material and simulation parameters.
 """
 import pygame
+import math
 from core.constants import *
 from core.material_manager import MaterialManager
 
@@ -476,6 +477,3 @@ class PropertyMenu:
         t_str = f"Adat: {t_modes[self.text_mode]}"
         t_txt = info_font.render(t_str, True, (180, 200, 180))
         surface.blit(t_txt, (self.x + 30, last_y + 25))
-
-
-import math  # Add missing import for Slider class
