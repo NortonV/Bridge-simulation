@@ -1,4 +1,1 @@
--Red nodes spawning
--Exaggeration changes physics
--Save doesn't save properties
 -More default bridges (and delete the not needed ones) -> Only 1-2 should be available

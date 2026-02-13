@@ -407,9 +407,10 @@ class BridgeBuilderApp:
         # Draw agent
         if self.ghost_agent.active:
             from ui.renderers import draw_ixchel
+            # Use visual_y for rendering (respects exaggeration)
             sx, sy = self.grid.world_to_screen(
                 self.ghost_agent.x,
-                self.ghost_agent.y
+                self.ghost_agent.visual_y
             )
             draw_ixchel(self.screen, sx, sy)
         

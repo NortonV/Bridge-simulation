@@ -7,7 +7,8 @@ class Ixchel:
     def __init__(self, audio_manager=None):
         self.active = False 
         self.x = 0
-        self.y = 0
+        self.y = 0  # Physics position (always calculated with exaggeration=1.0)
+        self.visual_y = 0  # Visual position (calculated with exaggeration for rendering)
         self.velocity_x = 0
         self.on_ground = False
         
@@ -18,6 +19,7 @@ class Ixchel:
     def spawn(self, x, y):
         self.x = x
         self.y = y
+        self.visual_y = y  # Initialize visual position
         self.active = True
         self.velocity_x = 0
         self.was_moving = False
@@ -60,6 +62,50 @@ class Ixchel:
         self.mass = MaterialManager.AGENT["mass"]
 
         self.x += self.velocity_x * dt
+        
+        # PHYSICS CALCULATION: Always use exaggeration=1.0 for accurate physics
+        physics_result = self._find_beam_position(beams, displacements, exaggeration_factor=1.0)
+        
+        # VISUAL CALCULATION: Use actual exaggeration for rendering
+        visual_result = self._find_beam_position(beams, displacements, exaggeration_factor=exaggeration)
+        
+        # Update physics position (used for solver)
+        if physics_result:
+            self.y = physics_result['y']
+            
+            # Update visual position (used for rendering)
+            if visual_result:
+                self.visual_y = visual_result['y']
+            else:
+                self.visual_y = self.y
+            
+            # Return physics-based load info (exaggeration=1.0)
+            return {
+                'beam': physics_result['beam'],
+                'node_a': physics_result['beam'].node_a if physics_result['beam'].node_a.x < physics_result['beam'].node_b.x else physics_result['beam'].node_b,
+                'node_b': physics_result['beam'].node_b if physics_result['beam'].node_a.x < physics_result['beam'].node_b.x else physics_result['beam'].node_a,
+                't': physics_result['t'],
+                'mass': self.mass
+            }
+        else:
+            # Falling
+            if self.y > -10: 
+                self.y -= 9.81 * dt
+                self.visual_y = self.y
+            return None
+    
+    def _find_beam_position(self, beams, displacements, exaggeration_factor):
+        """
+        Find which beam the agent is on and at what position.
+        
+        Args:
+            beams: List of beams to check
+            displacements: Node displacements from solver
+            exaggeration_factor: Displacement exaggeration (1.0 for physics, higher for visuals)
+        
+        Returns:
+            Dict with 'beam', 't', 'y' if on a beam, None otherwise
+        """
         best_beam_y = -9999
         found_beam = None
         t_val = 0.0
@@ -87,19 +133,18 @@ class Ixchel:
                 da_x, da_y, da_theta = displacements.get(node_a, (0,0,0))
                 db_x, db_y, db_theta = displacements.get(node_b, (0,0,0))
 
-            # Calculate Visual Endpoints (Exaggerated)
-            p1_x = x1_orig + da_x * exaggeration
-            p1_y = y1_orig + da_y * exaggeration
-            p2_x = x2_orig + db_x * exaggeration
-            p2_y = y2_orig + db_y * exaggeration
+            # Calculate Endpoints with specified exaggeration
+            p1_x = x1_orig + da_x * exaggeration_factor
+            p1_y = y1_orig + da_y * exaggeration_factor
+            p2_x = x2_orig + db_x * exaggeration_factor
+            p2_y = y2_orig + db_y * exaggeration_factor
 
-            # Check X bounds based on DEFORMED positions
+            # Check X bounds based on deformed positions
             min_x, max_x = min(p1_x, p2_x), max(p1_x, p2_x)
             
             if min_x <= self.x <= max_x:
                 if max_x - min_x < 0.01: continue 
                 
-
                 beam_dx = p2_x - p1_x
                 beam_dy = p2_y - p1_y
                 beam_len_sq = beam_dx*beam_dx + beam_dy*beam_dy
@@ -127,10 +172,10 @@ class Ixchel:
                     alpha = math.atan2(orig_dy, orig_dx)
                     
                     # Rotations relative to the new chord
-                    rot1 = (alpha + da_theta * exaggeration) - psi
-                    rot2 = (alpha + db_theta * exaggeration) - psi
+                    rot1 = (alpha + da_theta * exaggeration_factor) - psi
+                    rot2 = (alpha + db_theta * exaggeration_factor) - psi
                     
-                    # --- ADD THE SAME FIX HERE ---
+                    # Normalize angles to [-pi, pi]
                     while rot1 > math.pi: rot1 -= 2 * math.pi
                     while rot1 < -math.pi: rot1 += 2 * math.pi
                     while rot2 > math.pi: rot2 -= 2 * math.pi
@@ -159,20 +204,17 @@ class Ixchel:
                     t_val = t
 
         if found_beam:
-            self.y = best_beam_y
             return {
                 'beam': found_beam,
-                'node_a': found_beam.node_a if found_beam.node_a.x < found_beam.node_b.x else found_beam.node_b,
-                'node_b': found_beam.node_b if found_beam.node_a.x < found_beam.node_b.x else found_beam.node_a,
                 't': t_val,
-                'mass': self.mass
+                'y': best_beam_y
             }
         else:
-            if self.y > -10: self.y -= 9.81 * dt
             return None
 
     def draw(self, surface, grid):
         if not self.active: return
-        screen_x, screen_y = grid.world_to_screen(self.x, self.y)
+        # Use visual_y for rendering (respects exaggeration)
+        screen_x, screen_y = grid.world_to_screen(self.x, self.visual_y)
         pygame.draw.circle(surface, (0, 255, 255), (screen_x, screen_y - 20), 10) 
         pygame.draw.line(surface, (0, 255, 255), (screen_x, screen_y - 20), (screen_x, screen_y), 4)
