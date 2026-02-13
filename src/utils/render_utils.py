@@ -42,7 +42,7 @@ def draw_beam_texture(surface, start, end, beam_type, width, color, hollow_ratio
         _draw_spaghetti_strands(surface, start, end, width)
     
     # Hollow core (if applicable)
-    if hollow_ratio > 0.0:
+    if hollow_ratio > 0.01:
         _draw_hollow_core(surface, start, end, width, hollow_ratio)
 
 
@@ -87,9 +87,29 @@ def _draw_spaghetti_strands(surface, start, end, width):
 
 
 def _draw_hollow_core(surface, start, end, width, hollow_ratio):
-    """Draw white hollow core in center of beam."""
-    border_thickness = max(2, int(width * 0.15))
-    inner_width = max(0, width - (border_thickness * 2))
+    """
+    Draw white hollow core in center of beam, proportional to hollow_ratio.
+    
+    Args:
+        hollow_ratio: 0.0 to 1.0, where 1.0 = maximum hollowness
+    """
+    if hollow_ratio < 0.01:  # Skip if essentially solid
+        return
+    
+    # Calculate wall thickness (minimum 2px for visibility)
+    # At hollow_ratio=0.0, no core; at 1.0, maximum core (80% of width)
+    max_core_ratio = 0.80  # Cap at 80% to keep walls visible
+    actual_core_ratio = hollow_ratio * max_core_ratio
+    
+    # Minimum wall thickness to stay visible
+    min_wall_thickness = max(2, int(width * 0.10))
+    
+    # Calculate inner core width
+    inner_width = int(width * actual_core_ratio)
+    
+    # Ensure walls are visible
+    max_inner = width - (min_wall_thickness * 2)
+    inner_width = min(inner_width, max_inner)
     
     if inner_width > 0:
         pygame.draw.line(surface, (255, 255, 255), start, end, inner_width)
@@ -105,15 +125,22 @@ def draw_curved_beam(surface, points, color, width, beam_type, hollow_ratio):
         color: RGB color
         width: Line width
         beam_type: BeamType enum
-        hollow_ratio: Hollow core ratio
+        hollow_ratio: Hollow core ratio (0.0 to 1.0)
     """
     if len(points) > 1:
         pygame.draw.lines(surface, color, False, points, width)
         
-        # Add hollow core to curved beam
+        # Add proportional hollow core to curved beam
         if hollow_ratio > 0.01:
-            border_px = max(2, int(width * 0.15))
-            inner_w = max(0, width - (border_px * 2))
+            # Same formula as straight beams
+            max_core_ratio = 0.80
+            actual_core_ratio = hollow_ratio * max_core_ratio
+            min_wall_thickness = max(2, int(width * 0.10))
+            
+            inner_w = int(width * actual_core_ratio)
+            max_inner = width - (min_wall_thickness * 2)
+            inner_w = min(inner_w, max_inner)
+            
             if inner_w > 0:
                 pygame.draw.lines(surface, (255, 255, 255), False, points, inner_w)
 

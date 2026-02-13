@@ -1,5 +1,6 @@
 import math
 from core.constants import *
+from core.material_manager import MaterialManager
 
 class BeamType:
     WOOD = "wood"
@@ -13,8 +14,11 @@ class Beam:
         self.node_b = node_b
         self.type = material_type
         self.stress = 0.0
-        # Added hollow_ratio property
-        self.hollow_ratio = 0.0
+
+    @property
+    def hollow_ratio(self):
+        """Dynamically get hollow_ratio from material settings."""
+        return MaterialManager.MATERIALS.get(self.type, {}).get("hollow_ratio", 0.0)
 
     @property
     def color(self):
