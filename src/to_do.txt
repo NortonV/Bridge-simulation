@@ -1,1 +1,1 @@
--More default bridges (and delete the not needed ones) -> Only 1-2 should be available
+-Add 1 more default bridge: what we built IRL (it will be used in the demo)
