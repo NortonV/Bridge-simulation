@@ -285,6 +285,35 @@ Ahol:
 
 ### 6. Feszültségszámítás
 
+#### Maximális Hajlítási Nyomaték Meghatározása
+
+A program pontosan számolja a hajlítási nyomatékot, figyelembe véve a terhelés helyzetét:
+
+**1. Végponti nyomatékok** (slope-deflection módszerrel):
+```
+M_A = (2EI/L) × (2θ_A + θ_B - 3ψ) + M_FEM_A
+M_B = (2EI/L) × (2θ_B + θ_A - 3ψ) + M_FEM_B
+```
+
+**2. Nyomaték a terhelési pontban** (ha Ixchel a gerendán áll):
+
+Nyíróerő az A végpontnál:
+```
+V_A = P × b/L + (M_B - M_A)/L
+```
+
+Nyomaték a terhelési pontban (távolság 'a' az A ponttól):
+```
+M_load = M_A + V_A × a
+```
+
+**3. Maximális nyomaték kiválasztása**:
+```
+M_max = max(|M_A|, |M_B|, |M_load|)
+```
+
+Ez biztosítja, hogy a program felismerje a kritikus terhelést, még akkor is, ha az a gerenda közepén van (pl. egyszerű alátámasztású gerendák esetén).
+
 #### Axiális Feszültség
 ```
 σ_axial = N / A
@@ -293,10 +322,10 @@ Ahol **N** = axiális erő (± előjellel)
 
 #### Hajlítási Feszültség
 ```
-σ_bending = M × y / I
+σ_bending = M_max × y / I
 ```
 Ahol:
-- **M** = hajlítási nyomaték
+- **M_max** = maximális hajlítási nyomaték (lásd fent)
 - **y** = távolság a semleges tengely től (= R/2 a szélső szálaknál)
 - **I** = másodrendű nyomaték
 
@@ -364,18 +393,19 @@ Ahol:
 
 ### Előnyök ✓
 
-1. **Pontos statikai analízis**: A lineáris rugalmas tartománybancalculates pontos eredményeket ad
+1. **Pontos statikai analízis**: A lineáris rugalmas tartományban pontos eredményeket ad
 2. **Hatékony számítás**: Nagy szerkezeteknél is gyors
 3. **Tetszőleges geometria**: Bármilyen 2D keretszerkezet modellezhető
-4. **Többféle terhelés**: Gravitáció, ponszerű teher, hőmérséklet egyidejűleg
+4. **Többféle terhelés**: Gravitáció, pontszerű teher, hőmérséklet egyidejűleg
+5. **Pontos nyomatékszámítás**: A program kiszámolja a tényleges maximális nyomatékot, akár a gerenda közepén is
 6. **Valós idejű**: Minden keretváltásnál újraszámol, ezért interaktív
 
 ### Korlátok ⚠
 
-1. **Rugalmas tartomány**: A képlékeny alakváltozást nem szimulálja
-2. **Statikus**: Dinamikus hatásokat (rezgés, lökés) nem vesz figyelembe
-3. **2D**: Csak síkbeli szerkezetekre működik
-4. **Nyomaték csak végpontokon**: A gerenda közepén lévő maximális nyomatékot nem számolja pontosan
+1. **Lineáris analízis**: Nem kezeli a nagymérvű deformációkat (geometriai nemlinearitás)
+2. **Rugalmas tartomány**: A képlékeny alakváltozást nem szimulálja
+3. **Statikus**: Dinamikus hatásokat (rezgés, lökés) nem vesz figyelembe
+4. **2D**: Csak síkbeli szerkezetekre működik
 5. **Nincs szimulált törés**: Ha a híd eltörik, megáll a szimuláció
 
 ---

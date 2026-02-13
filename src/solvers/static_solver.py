@@ -227,8 +227,26 @@ class StaticSolver:
                 fem_a, fem_b = beam_fem_loads[beam]
                 moment_a += fem_a
                 moment_b += fem_b
-
-            max_moment = max(abs(moment_a), abs(moment_b))
+                
+                # --- FIX 5: Calculate moment at load point ---
+                # The maximum moment often occurs AT the load, not at the ends.
+                # Using shear force equilibrium to find the exact moment at load location.
+                t, mass = point_load[beam]
+                P = mass * g
+                a = t * L
+                b = (1 - t) * L
+                
+                # Shear force at left end from equilibrium: V_A = P*b/L + (M_B - M_A)/L
+                V_a = (P * b / L) + (moment_b - moment_a) / L
+                
+                # Moment at load point (distance 'a' from node_a): M = M_A + V_A * a
+                moment_at_load = moment_a + V_a * a
+                
+                # Use maximum of all three critical points
+                max_moment = max(abs(moment_a), abs(moment_b), abs(moment_at_load))
+            else:
+                # No point load on this beam - only check end moments
+                max_moment = max(abs(moment_a), abs(moment_b))
             
             # 1. Calculate Standard Stress (Yield/Strength based)
             sigma_axial = axial_force / A
