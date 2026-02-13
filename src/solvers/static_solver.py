@@ -101,12 +101,27 @@ class StaticSolver:
             props = MaterialManager.get_properties(beam.type, hollow_ratio=beam.hollow_ratio)
             mass = props["area"] * beam.length * props["density"]
             weight = mass * g
+            L = beam.length
             
-            # FIX 1: SUBTRACT weight (Gravity acts DOWN, Y is UP)
+            # GRAVITY: SUBTRACT weight (Gravity acts DOWN, Y is UP)
             idx_a_y = node_map[beam.node_a] * 3 + 1
             idx_b_y = node_map[beam.node_b] * 3 + 1
             F_global[idx_a_y] -= weight / 2.0
             F_global[idx_b_y] -= weight / 2.0
+            
+            # ADDED: Fixed-end moments from uniformly distributed self-weight
+            # For uniformly distributed load w (N/m): M_FEM = ± wL²/12
+            # This improves accuracy for long beams
+            if L > 1e-6:
+                w = weight / L  # Distributed load (N/m)
+                M_fem_gravity = (w * L**2) / 12.0
+                
+                idx_a_theta = node_map[beam.node_a] * 3 + 2
+                idx_b_theta = node_map[beam.node_b] * 3 + 2
+                
+                # Apply moments (CCW at A, CW at B)
+                F_global[idx_a_theta] -= M_fem_gravity
+                F_global[idx_b_theta] += M_fem_gravity
         
         # Point Load (Agent)
         if point_load:
@@ -119,9 +134,8 @@ class StaticSolver:
                 a = t * L
                 b = (1.0 - t) * L
                 
-                # --- FIX 2: Fixed End Moments & Reaction Forces ---
-                # Instead of simple linear interpolation, we use exact beam formulas.
-                # This ensures that even if nodes are FIXED, the load is registered as moments.
+                # --- Fixed End Moments & Reaction Forces (Exact Formulas) ---
+                # These ensure correct stress even when nodes are FIXED
                 
                 # Vertical Reaction Forces (Standard Fixed-Fixed Beam formulas)
                 # These act UP on the beam, so equivalent nodal loads act DOWN (-)
@@ -220,7 +234,7 @@ class StaticSolver:
             moment_a = (2*E*I/L) * (2*theta_a + theta_b - 3*relative_disp)
             moment_b = (2*E*I/L) * (2*theta_b + theta_a - 3*relative_disp)
             
-            # --- FIX 3: Superposition of Fixed End Moments ---
+            # --- Superposition of Fixed End Moments ---
             # If there is a point load, we must add the "Local" moments to the "Nodal" moments.
             # Otherwise, a fixed-fixed beam shows 0 stress.
             if beam in beam_fem_loads:
@@ -228,7 +242,7 @@ class StaticSolver:
                 moment_a += fem_a
                 moment_b += fem_b
                 
-                # --- FIX 5: Calculate moment at load point ---
+                # --- Calculate moment at load point ---
                 # The maximum moment often occurs AT the load, not at the ends.
                 # Using shear force equilibrium to find the exact moment at load location.
                 t, mass = point_load[beam]
@@ -248,37 +262,50 @@ class StaticSolver:
                 # No point load on this beam - only check end moments
                 max_moment = max(abs(moment_a), abs(moment_b))
             
-            # 1. Calculate Standard Stress (Yield/Strength based)
+            # --- STRESS CALCULATION (FIXED: Physically Accurate Combination) ---
+            # Calculate stresses at extreme fibers
             sigma_axial = axial_force / A
             sigma_bend = max_moment * (props["thickness"]/2) / I
             
-            total_stress = abs(sigma_axial) + abs(sigma_bend)
+            # CORRECTED: Stress combines differently on top vs. bottom fiber
+            # Top fiber: σ_axial + σ_bending
+            # Bottom fiber: σ_axial - σ_bending
+            # Take maximum of both
+            stress_top_fiber = abs(sigma_axial + sigma_bend)
+            stress_bottom_fiber = abs(sigma_axial - sigma_bend)
+            max_stress = max(stress_top_fiber, stress_bottom_fiber)
             
             # Base ratio based on material strength
-            stress_ratio_yield = total_stress / props["strength"]
+            stress_ratio_yield = max_stress / props["strength"]
             
             # Initialize final ratio
             final_stress_ratio = stress_ratio_yield
 
-            # 2. Calculate Buckling Ratio (Stability based)
-            if axial_force < 0: # Compression
-                K = 1.0 
-                # Euler Buckling Formula: P_cr = (pi^2 * E * I) / (K * L)^2
+            # --- BUCKLING CHECK (Stability based) ---
+            if axial_force < 0:  # Compression
+                # Effective length factor K:
+                # K=1.0: Pinned-Pinned (conservative assumption used here)
+                # K=0.5: Fixed-Fixed (would be 4× stronger, but requires complex analysis)
+                # K=0.7: Fixed-Pinned
+                # We use K=1.0 for safety - this slightly underestimates buckling capacity
+                K = 1.0
+                
+                # Euler Buckling Formula: P_cr = (π² × E × I) / (K × L)²
                 P_cr = (math.pi**2 * E * I) / ((K*L)**2)
                 
                 # Calculate how close we are to buckling (0.0 to 1.0+)
                 buckling_ratio = abs(axial_force) / P_cr
                 
-                # The beam is under load from whichever factor is higher
+                # The beam fails from whichever factor is higher
                 final_stress_ratio = max(stress_ratio_yield, buckling_ratio)
                 
-                # Optional: Keep your instant failure flag if it exceeds 100%
+                # Instant failure if buckling limit exceeded
                 if buckling_ratio > 1.0:
-                    final_stress_ratio = 1.0 
+                    final_stress_ratio = 1.0
 
             # Store the result
             self.results[beam] = axial_force
             self.bending_results[beam] = max_moment 
-            self.stress_ratios[beam] = final_stress_ratio # Use the corrected ratio
+            self.stress_ratios[beam] = final_stress_ratio
 
         return True
